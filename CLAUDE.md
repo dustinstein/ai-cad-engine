@@ -51,6 +51,7 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - `src/ai_cad_engine/measure.py` — solid measurement helpers (seed of the verification loop).
 - `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
 - `src/ai_cad_engine/drawing/dxf_writer.py` — third-angle layout + ezdxf DXF writer.
+- `src/ai_cad_engine/drawing/annotate.py` — role-based feature finding, centerlines, DIMENSION entities.
 - `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf}`. `out/*.step|dxf` committed for Alibre checks.
 - Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`.
 
@@ -67,9 +68,21 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   seams, and emits hidden edges under visible ones. We normalise to exact LINE/CIRCLE/ARC, merge
   collinear lines, and drop covered hidden prims. Tests assert DXF contains only LINE/CIRCLE/ARC.
 - DXF: R2018, $INSUNITS=4 (mm). Layers VISIBLE / HIDDEN. Own HIDDEN linetype (3 mm dash, 1.5 mm gap);
-  ezdxf's stock patterns are inch-sized and have no HIDDEN. Each view is a DXF GROUP `VIEW_<NAME>`.
+  ezdxf's stock patterns are inch-sized and have no HIDDEN. Each view is a DXF GROUP `VIEW_<NAME>`;
+  annotations per view are in `ANNOT_<NAME>`. Layers CENTER (own CENTER_MM linetype) and DIM.
+- Dimensions: real DIMENSION entities, rendered (geometry block present), dimstyle `ENGINE_MM`
+  (3.5 mm text, 2 decimals, dimlfac 1, horizontal text, leader-style diameters via dimtofl=0).
+  Don't use ezdxf's EZ_* dimstyles — they're scaled for other units (EZ_RADIUS shows 20 mm as "2000").
+- Dimension defpoints are snapped to features found in the drawn views **by role** (largest circle,
+  off-axis circles, view extents, full-width face), never to table values, and text uses `<>` so the
+  DXF shows the measured value. Tests compare DIMENSION measurements to the standard, and a negative
+  test proves a 0.5 mm error shows up on the drawing.
+- **Open item:** dimension units — mm only for now. ezdxf does not render DIMALT (dual units) into the
+  dimension block. Oilfield drawings are often inch; user to choose mm / inch / dual.
+- Text height 3.5 mm is at 1:1 model space; revisit when the sheet/scale step lands.
 
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
-- [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF, no dimensions yet. Awaiting Alibre check.
-- [ ] Next candidates: centerlines + real DIMENSION entities; sheet/title block; verification report.
+- [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF. Confirmed in Alibre (1:1 mm, dashed hidden, BC, layers).
+- [x] Step 3: centerlines + DIMENSION entities (OD, BC, 8X hole, thickness, overall length). Awaiting Alibre check.
+- [ ] Next candidates: sheet + title block + scale; verification report; hub/RF dims; units decision.

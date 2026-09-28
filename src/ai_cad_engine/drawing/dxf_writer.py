@@ -7,9 +7,11 @@ are collected in a DXF GROUP named VIEW_<NAME> so tools/tests can find them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 from pathlib import Path
 
 import ezdxf
+import ezdxf.document
 
 from ai_cad_engine.drawing.views import Arc, Circle, Line, Polyline, Prim, View
 
@@ -39,12 +41,16 @@ def layout_third_angle(
     ]
 
 
-def write_dxf(placed: list[PlacedView], path: Path) -> None:
+def new_doc() -> ezdxf.document.Drawing:
     doc = ezdxf.new(DXF_VERSION, setup=True, units=INSUNITS_MM)
     doc.header["$MEASUREMENT"] = 1  # metric
     doc.linetypes.add("HIDDEN", pattern=list(HIDDEN_PATTERN), description="Hidden __ __ __")
     doc.layers.add("VISIBLE", color=7, lineweight=50)
     doc.layers.add("HIDDEN", color=8, linetype="HIDDEN", lineweight=25)
+    return doc
+
+
+def add_views(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> None:
     msp = doc.modelspace()
     for pv in placed:
         entities = []
@@ -52,6 +58,17 @@ def write_dxf(placed: list[PlacedView], path: Path) -> None:
             for p in prims:
                 entities.append(_add(msp, p, pv.offset, layer))
         doc.groups.new(f"VIEW_{pv.view.spec.name}").set_data(entities)
+
+
+def write_dxf(
+    placed: list[PlacedView],
+    path: Path,
+    annotate: Callable[[ezdxf.document.Drawing, list[PlacedView]], None] | None = None,
+) -> None:
+    doc = new_doc()
+    add_views(doc, placed)
+    if annotate is not None:
+        annotate(doc, placed)
     doc.saveas(path)
 
 

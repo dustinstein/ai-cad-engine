@@ -3,6 +3,7 @@ from math import hypot
 import ezdxf
 import pytest
 
+from ai_cad_engine.drawing.annotate import DIMSTYLE, annotate_flange
 from ai_cad_engine.drawing.dxf_writer import (
     INSUNITS_MM,
     layout_third_angle,
@@ -20,7 +21,7 @@ def doc(tmp_path_factory):
     part = build_weld_neck_flange(F)
     views = [project(part, s) for s in (FRONT, TOP, RIGHT)]
     path = tmp_path_factory.mktemp("dxf") / "f.dxf"
-    write_dxf(layout_third_angle(*views), path)
+    write_dxf(layout_third_angle(*views), path, annotate=annotate_flange)
     return ezdxf.readfile(path)
 
 
@@ -39,10 +40,17 @@ def test_units_mm(doc):
     assert doc.header["$INSUNITS"] == INSUNITS_MM
 
 
+VIEW_NAMES = ("FRONT", "TOP", "RIGHT")
+
+
+def view_entities(doc):
+    return [e for n in VIEW_NAMES for e in group(doc, n)]
+
+
 def test_only_exact_entity_types(doc):
     # Dimensioning relies on real lines/circles/arcs, not approximations.
-    types = {e.dxftype() for e in doc.modelspace()}
-    assert types <= {"LINE", "CIRCLE", "ARC"}
+    assert {e.dxftype() for e in view_entities(doc)} <= {"LINE", "CIRCLE", "ARC"}
+    assert {e.dxftype() for e in doc.modelspace()} <= {"LINE", "CIRCLE", "ARC", "DIMENSION"}
 
 
 def test_hidden_layer_uses_hidden_linetype(doc):
@@ -98,7 +106,7 @@ def test_all_referenced_linetypes_defined(doc):
 
 def test_no_duplicate_entities(doc):
     seen = set()
-    for e in doc.modelspace():
+    for e in view_entities(doc):
         if e.dxftype() == "LINE":
             a, b = sorted([tuple(round(v, 4) for v in e.dxf.start), tuple(round(v, 4) for v in e.dxf.end)])
             key = ("L", a, b)
@@ -116,3 +124,71 @@ def test_views_aligned_third_angle(doc):
     assert t.extmin.y > f.extmax.y
     assert r.extmin.y == pytest.approx(f.extmin.y, abs=TOL)  # RIGHT beside FRONT
     assert r.extmin.x > f.extmax.x
+
+
+def dims(doc):
+    return list(doc.modelspace().query("DIMENSION"))
+
+
+def dia_dim_by_text(doc, text):
+    found = [d for d in dims(doc) if d.dimtype & 0xF == 3 and d.dxf.text == text]
+    assert len(found) == 1, text
+    return found[0]
+
+
+def test_dimensions_are_real_dimension_entities(doc):
+    ds = dims(doc)
+    assert len(ds) == 5
+    for d in ds:
+        assert d.dxf.dimstyle == DIMSTYLE
+        assert d.dxf.layer == "DIM"
+        assert d.get_geometry_block() is not None  # rendered, displays without regen
+
+
+# Measurements come from DIMENSION defpoints, which were snapped to drawn
+# geometry, so these compare what the drawing shows against the standard.
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("<>", F.od),
+        ("<> B.C.", F.bolt_circle_dia),
+        ("8X <> THRU", F.bolt_hole_dia),
+    ],
+)
+def test_diameter_dimensions(doc, text, expected):
+    d = dia_dim_by_text(doc, text)
+    assert d.get_measurement() == pytest.approx(expected, abs=TOL)
+
+
+def test_linear_dimensions(doc):
+    lin = sorted((d for d in dims(doc) if d.dimtype & 0xF in (0, 1)), key=lambda d: d.get_measurement())
+    assert [d.get_measurement() for d in lin] == pytest.approx(
+        [F.thickness, F.length_through_hub], abs=TOL
+    )
+
+
+def test_dimstyle_is_unscaled_mm(doc):
+    st = doc.dimstyles.get(DIMSTYLE)
+    assert st.dxf.dimlfac == 1.0
+    assert st.dxf.dimdec == 2
+
+
+def test_centerlines(doc):
+    cl = [e for e in doc.modelspace() if e.dxf.layer == "CENTER"]
+    circles = [e for e in cl if e.dxftype() == "CIRCLE"]
+    assert len(circles) == 1
+    assert 2 * circles[0].dxf.radius == pytest.approx(F.bolt_circle_dia, abs=TOL)
+    # 2 cross lines + 8 hole marks in TOP, 1 axis line each in FRONT and RIGHT
+    assert len([e for e in cl if e.dxftype() == "LINE"]) == 2 + F.bolt_hole_count + 2
+
+
+def test_dimensions_report_drawn_geometry_not_table(tmp_path):
+    # A flange built 0.5 mm off must show the wrong value, not the table value.
+    from dataclasses import replace
+
+    bad = replace(F, bolt_circle_dia=F.bolt_circle_dia + 0.5)
+    part = build_weld_neck_flange(bad)
+    path = tmp_path / "bad.dxf"
+    write_dxf(layout_third_angle(*(project(part, s) for s in (FRONT, TOP, RIGHT))), path, annotate=annotate_flange)
+    d = dia_dim_by_text(ezdxf.readfile(path), "<> B.C.")
+    assert d.get_measurement() == pytest.approx(F.bolt_circle_dia + 0.5, abs=TOL)

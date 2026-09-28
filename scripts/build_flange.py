@@ -1,9 +1,10 @@
-"""Build the NPS 4 Class 150 weld-neck flange; export STEP and a 3-view DXF."""
+"""Build the NPS 4 Class 150 weld-neck flange; export STEP and a dimensioned 3-view DXF."""
 
 from pathlib import Path
 
 from build123d import Unit, export_step
 
+from ai_cad_engine.drawing.annotate import annotate_flange
 from ai_cad_engine.drawing.dxf_writer import layout_third_angle, write_dxf
 from ai_cad_engine.drawing.views import FRONT, RIGHT, TOP, project
 from ai_cad_engine.parts.weld_neck_flange import build_weld_neck_flange
@@ -25,7 +26,7 @@ def main() -> None:
 
     dxf = OUT / "flange_4in_150.dxf"
     views = [project(flange, s) for s in (FRONT, TOP, RIGHT)]
-    write_dxf(layout_third_angle(*views), dxf)
+    write_dxf(layout_third_angle(*views), dxf, annotate=annotate_flange)
     print(f"wrote {dxf}")
 
 
