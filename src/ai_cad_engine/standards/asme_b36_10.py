@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ai_cad_engine.standards.tables import TableSanityError, find, load
+from ai_cad_engine.standards.tables import TableSanityError, find, load, yes
 
 IN = 25.4
 TABLE = "asme_b36_10.csv"
@@ -19,6 +19,7 @@ class PipeSize:
     schedule: str
     od: float
     wall: float
+    verified: bool = True
 
     @property
     def id(self) -> float:
@@ -34,7 +35,7 @@ def check_row(r: dict) -> None:
 def pipe(nps: str, schedule: str, allow_unverified: bool = False) -> PipeSize:
     r = find(TABLE, allow_unverified, nps=nps, schedule=schedule)
     check_row(r)
-    return PipeSize(nps, schedule, float(r["od"]) * IN, float(r["wall"]) * IN)
+    return PipeSize(nps, schedule, float(r["od"]) * IN, float(r["wall"]) * IN, yes(r["verified"]))
 
 
 def all_rows() -> tuple[dict, ...]:

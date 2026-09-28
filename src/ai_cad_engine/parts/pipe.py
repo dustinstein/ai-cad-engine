@@ -17,7 +17,7 @@ def build_pipe(od: float, wall: float, length: float) -> Solid:
 
 
 def pipe_component(
-    tag: str, nps: str, od: float, wall: float, length: float, schedule: str
+    tag: str, nps: str, od: float, wall: float, length: float, schedule: str, verified: bool = True
 ) -> Component:
     ends = {"od": od, "id": od - 2 * wall, "nps": nps}
     return Component(
@@ -29,5 +29,5 @@ def pipe_component(
             "end1": Port((0, 0, 0), (0, 0, -1), end="BW", attrs=ends),
             "end2": Port((0, 0, length), (0, 0, 1), end="BW", attrs=ends),
         },
-        meta={"length": length, "od": od, "wall": wall},
+        meta={"length": length, "od": od, "wall": wall, "verified": verified},
     )

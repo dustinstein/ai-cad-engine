@@ -58,7 +58,10 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   drawing), DIMENSION tagging.
 - `src/ai_cad_engine/assembly.py` — Port / Component / Assembly: connect ports, port-vs-geometry
   validation, connection + interference checks, bolt-hole angles, named STEP assembly, BOM.
-- `src/ai_cad_engine/assemblies/` — assembly builders (`spool.py`: flange + pipe + flange).
+- `src/ai_cad_engine/assemblies/` — assembly builders (`spool.py`: flange + pipe + flange;
+  `transition.py`: large pipe + ecc reducer + small pipe, FOB/FOT).
+- `src/ai_cad_engine/standards/asme_b16_9.py` + `data/asme_b16_9_reducers.csv` — reducer H; ends from
+  B36.10 by schedule. `parts/reducer.py` — eccentric reducer builder/ports/critical dims/measure.
 - `src/ai_cad_engine/standards/asme_b36_10.py` — pipe OD/wall by NPS + schedule.
 - `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
 - `src/ai_cad_engine/drawing/dxf_writer.py` — doc setup (units, linetypes), third-angle layout, view writer.
@@ -72,6 +75,8 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf,verify.json}`; prints the report table and
   exits 1 on verification failure. `out/*.step|dxf|verify.json` committed for Alibre checks.
 - `scripts/build_spool.py` → `out/spool_4in_150_48in.{step,bom.csv,verify.json}`.
+- `scripts/build_transition.py [--preview]` → `out/transition_12x8_fob[_PRELIM].{step,bom.csv,verify.json}`.
+  `--preview` allows unverified rows; outputs get `_PRELIM` and the report FAILS `table_data_verified`.
 - Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`, `.../build_spool.py`.
 
 ## Decisions / conventions
@@ -174,6 +179,15 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   connection check requires faces exactly `gap` apart on axis. Face-to-face is over the raised faces
   INCLUDING gaps; pipe cut length = F-F − 2 × flange overall length − 2 × gap. Default 1/16"
   (`DEFAULT_ROOT_GAP`), typical 1/16"–1/8", set per weld procedure. BOM shows CUT LENGTH.
+- Job decisions (pig launcher): root gap 1/16"; 12" barrel wall .688" (B36.10 Sch 80, not the GA's
+  .687); nozzles Sch 80.
+- Unverified table data is visible, never silent: table entries / components carry `verified`;
+  `Assembly.unverified()` lists them; assembly reports include a `table_data_verified` check.
+- Eccentric reducer: oblique-cone loft between end circles, end centers offset e = (D_L − D_S)/2 so the
+  OUTSIDE is flat along one line; with unequal walls the inside is not exactly flat. Port x_dir points to
+  the flat side; `connect(..., align_x=world_dir)` orients it (FOB = align_x down). FOB/FOT verified on
+  geometry: both barrels' outside bottoms (tops) at the same elevation. Volume test vs frustum formula
+  (Cavalieri). B16.9 doesn't fix the body shape (real fittings may have short straight ends).
 - STEP assemblies: build123d `Compound(children=[labeled solids])` → XCAF assembly with named products
   (NEXT_ASSEMBLY_USAGE_OCCURRENCE), names survive re-import.
 
@@ -191,9 +205,10 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
       48" F-F spool. Confirmed in Alibre (assembly F1/P1/F2, 1219.2 mm, two-holed).
 - [x] Step 8: CSV standards tables with verified gate + sanity checks; RF convention per row; Cl600
       NPS 2/3/6/8/12 and Sch 80/160 pipe rows — user-verified 2026-09-28 (12" Sch 80 wall .688;
-      GA's 11.376 ID implies .687 — open question which the job uses).
+      GA's 11.376 ID implies .687 — user chose .688).
 - [x] Step 9: butt-weld root gap in assemblies; spool pipe cut 41.875" for 48" F-F at 1/16" gaps.
-- [ ] Open: nozzle schedules (2"/3"/6": Sch 80? 160? XXS?).
-- [ ] Toward the pig launcher: B16.9 fittings
+- [x] Step 10: B16.9 eccentric reducer 12x8 (H = 7.00" DRAFT, awaiting user verification) +
+      barrel transition assembly with FOB/FOT, preview mode for unverified data.
+- [ ] Toward the pig launcher: B16.9 tee / lateral
       (ecc reducer, tee/lateral) → branch connections (nozzle on barrel) → GA drawing + BOM table →
       JSON assembly spec → LLM spec extraction.

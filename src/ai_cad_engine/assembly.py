@@ -120,10 +120,20 @@ class Assembly:
         return self._put(comp, at.location * comp.ports[port].plane.location.inverse())
 
     def connect(
-        self, comp: Component, port: str, to: str, clock_deg: float = 0.0, gap: float = 0.0
+        self,
+        comp: Component,
+        port: str,
+        to: str,
+        clock_deg: float = 0.0,
+        gap: float = 0.0,
+        align_x: tuple[float, float, float] | None = None,
     ) -> Placed:
         """Place `comp` so its `port` mates face-to-face with placed port `to` ("TAG.port"),
-        `gap` mm apart along the shared axis (butt-weld root gap; must be 0 for other ends)."""
+        `gap` mm apart along the shared axis (butt-weld root gap; must be 0 for other ends).
+
+        Orientation about the axis: the new port's x_dir follows the target's x_dir rotated by
+        `clock_deg`, or, if `align_x` is given, points along that world direction (projected into
+        the face plane) — e.g. an eccentric reducer's flat side straight down."""
         tag, pname = to.split(".")
         target = self.placed[tag].port(pname)
         if gap and (target.end != "BW" or comp.ports[port].end != "BW"):
@@ -132,6 +142,13 @@ class Assembly:
             raise ValueError("negative gap")
         z = Vector(target.direction) * -1
         x = Vector(target.x_dir)
+        if align_x is not None:
+            a = Vector(align_x)
+            zn = z.normalized()
+            x = a - zn * a.dot(zn)
+            if x.length < 1e-9:
+                raise ValueError("align_x is parallel to the connection axis")
+            x = x.normalized()
         if clock_deg:  # rotate x_dir about the shared axis (Rodrigues; x is perpendicular to z)
             a = radians(clock_deg)
             x = x * cos(a) + z.normalized().cross(x) * sin(a)
@@ -196,6 +213,10 @@ class Assembly:
 
     def export_step(self, path: Path) -> None:
         export_step(self.compound(), path, unit=Unit.MM)
+
+    def unverified(self) -> list[str]:
+        """Tags of components built from table rows not verified against the standard."""
+        return [t for t, p in self.placed.items() if not p.comp.meta.get("verified", True)]
 
     def bom(self) -> list[dict]:
         rows: dict[str, dict] = {}
