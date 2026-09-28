@@ -88,6 +88,9 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   our flange file, not DXF version or ezdxf's DIMENSION encoding per se. Bisecting with
   `scripts/diag_dxf_dims.py` → `out/diag/A..H` (one factor each: vertical, layer DIM, GROUP,
   diameter default / text outside / custom text, flange without groups).
+  Alibre's own export (1 horizontal linear dim, R2018/AC1032): dimstyle Standard, layer DIMENSIONS,
+  dimtype 32, NON-anonymous geometry block "D1" (we write "*D1"), no groups, $INSUNITS=1 (inch).
+  Nothing there contradicts our working minimal file, so the matrix results decide it.
 
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
