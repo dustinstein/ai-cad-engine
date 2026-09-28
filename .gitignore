@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+dist/
+# Generated output. Reference STEP files are committed on purpose so they can be checked in Alibre.
+out/*
+!out/*.step
