@@ -49,7 +49,9 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - `src/ai_cad_engine/standards/asme_b16_5.py` — B16.5 tables (inch values ×25.4, stored in mm).
 - `src/ai_cad_engine/parts/` — deterministic part builders from table entries.
 - `src/ai_cad_engine/measure.py` — solid measurement helpers (seed of the verification loop).
-- `scripts/build_flange.py` → `out/flange_4in_150.step`. `out/*.step` is committed for Alibre checks.
+- `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
+- `src/ai_cad_engine/drawing/dxf_writer.py` — third-angle layout + ezdxf DXF writer.
+- `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf}`. `out/*.step|dxf` committed for Alibre checks.
 - Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`.
 
 ## Decisions / conventions
@@ -58,7 +60,16 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - B16.5 Class 150/300: 0.06" RF treated as INCLUDED in C (thickness) and Y (length through hub),
   per the commonly published tables. **Open item:** confirm against the user's B16.5 edition.
 - Weld-neck v0 simplifications: straight hub taper, no r1 fillet, no weld bevel, no RF serration.
+- Drawing: third-angle projection (ASME Y14.3). Z-up model; FRONT = viewer at -Y, TOP = +Z, RIGHT = +X.
+  View 2D coords = model coords projected (camera looks at model origin) → view↔model is a pure axis
+  map; layout applies only a translation per view. Drawn 1:1 in mm in model space (sheet/paperspace later).
+- HLR cleanup is mandatory: OCC returns straight silhouettes as B-splines, splits edges at cylinder
+  seams, and emits hidden edges under visible ones. We normalise to exact LINE/CIRCLE/ARC, merge
+  collinear lines, and drop covered hidden prims. Tests assert DXF contains only LINE/CIRCLE/ARC.
+- DXF: R2018, $INSUNITS=4 (mm). Layers VISIBLE / HIDDEN. Own HIDDEN linetype (3 mm dash, 1.5 mm gap);
+  ezdxf's stock patterns are inch-sized and have no HIDDEN. Each view is a DXF GROUP `VIEW_<NAME>`.
 
 ## Status
-- [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest (OD, BC, hole count/dia, overall length).
-      Awaiting user confirmation in Alibre.
+- [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
+- [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF, no dimensions yet. Awaiting Alibre check.
+- [ ] Next candidates: centerlines + real DIMENSION entities; sheet/title block; verification report.

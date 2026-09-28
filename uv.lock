@@ -8,6 +8,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "build123d" },
+    { name = "ezdxf" },
 ]
 
 [package.dev-dependencies]
@@ -16,7 +17,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "build123d", specifier = ">=0.13.0" }]
+requires-dist = [
+    { name = "build123d", specifier = ">=0.13.0" },
+    { name = "ezdxf", specifier = ">=1.4.4" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
