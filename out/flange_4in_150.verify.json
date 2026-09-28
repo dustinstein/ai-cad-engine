@@ -5,12 +5,7 @@
   "model_tolerance_mm": 0.005,
   "passed": true,
   "not_on_drawing": [
-    "bolt_hole_offset",
-    "bore",
-    "raised_face_dia",
-    "raised_face_height",
-    "hub_dia_base",
-    "hub_dia_weld"
+    "bolt_hole_offset"
   ],
   "items": [
     {
@@ -33,7 +28,7 @@
       "nominal": 190.5,
       "model": 190.5,
       "model_pass": true,
-      "drawing": 190.50000000000006,
+      "drawing": 190.5,
       "drawing_text": "%%c7.500 B.C.",
       "expected_text": "7.500",
       "drawing_pass": true,
@@ -85,10 +80,10 @@
       "nominal": 102.26039999999999,
       "model": 102.26039999999999,
       "model_pass": true,
-      "drawing": null,
-      "drawing_text": null,
-      "expected_text": null,
-      "drawing_pass": null,
+      "drawing": 102.26039999999999,
+      "drawing_text": "%%c4.026",
+      "expected_text": "4.026",
+      "drawing_pass": true,
       "passed": true
     },
     {
@@ -98,10 +93,10 @@
       "nominal": 157.226,
       "model": 157.226,
       "model_pass": true,
-      "drawing": null,
-      "drawing_text": null,
-      "expected_text": null,
-      "drawing_pass": null,
+      "drawing": 157.22599999999994,
+      "drawing_text": "%%c6.190",
+      "expected_text": "6.190",
+      "drawing_pass": true,
       "passed": true
     },
     {
@@ -111,10 +106,10 @@
       "nominal": 1.5239999999999998,
       "model": 1.5239999999999998,
       "model_pass": true,
-      "drawing": null,
-      "drawing_text": null,
-      "expected_text": null,
-      "drawing_pass": null,
+      "drawing": 1.5240000000000125,
+      "drawing_text": ".060",
+      "expected_text": ".060",
+      "drawing_pass": true,
       "passed": true
     },
     {
@@ -124,7 +119,7 @@
       "nominal": 23.875999999999998,
       "model": 23.875999999999998,
       "model_pass": true,
-      "drawing": 23.87600000000001,
+      "drawing": 23.875999999999987,
       "drawing_text": ".940",
       "expected_text": ".940",
       "drawing_pass": true,
@@ -137,7 +132,7 @@
       "nominal": 76.19999999999999,
       "model": 76.19999999999999,
       "model_pass": true,
-      "drawing": 76.19999999999997,
+      "drawing": 76.20000000000005,
       "drawing_text": "3.000",
       "expected_text": "3.000",
       "drawing_pass": true,
@@ -150,10 +145,10 @@
       "nominal": 134.874,
       "model": 134.874,
       "model_pass": true,
-      "drawing": null,
-      "drawing_text": null,
-      "expected_text": null,
-      "drawing_pass": null,
+      "drawing": 134.87399999999997,
+      "drawing_text": "%%c5.310",
+      "expected_text": "5.310",
+      "drawing_pass": true,
       "passed": true
     },
     {
@@ -163,10 +158,10 @@
       "nominal": 114.3,
       "model": 114.3,
       "model_pass": true,
-      "drawing": null,
-      "drawing_text": null,
-      "expected_text": null,
-      "drawing_pass": null,
+      "drawing": 114.3,
+      "drawing_text": "%%c4.500",
+      "expected_text": "4.500",
+      "drawing_pass": true,
       "passed": true
     }
   ]

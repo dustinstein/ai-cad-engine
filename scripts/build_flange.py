@@ -7,7 +7,7 @@ from pathlib import Path
 
 from build123d import Unit, export_step
 
-from ai_cad_engine.drawing.annotate import annotate_flange
+from ai_cad_engine.drawing import flange_drawing as fd
 from ai_cad_engine.drawing.make import make_drawing
 from ai_cad_engine.parts.weld_neck_flange import build_weld_neck_flange, critical_dims, measure
 from ai_cad_engine.standards.asme_b16_5 import WN_4_150, flange_title_block
@@ -27,7 +27,14 @@ def main() -> int:
     print(f"wrote {step}")
 
     dxf = OUT / f"{NAME}.dxf"
-    res = make_drawing(flange, annotate_flange, flange_title_block(f, date=date.today().isoformat()), dxf)
+    res = make_drawing(
+        fd.flange_views(flange),
+        fd.annotate_flange,
+        flange_title_block(f, date=date.today().isoformat()),
+        dxf,
+        view_gap=fd.VIEW_GAP,
+        allowance=fd.ALLOWANCE,
+    )
     print(f"wrote {dxf}  (ANSI {res.sheet.size}, {res.sheet.scale_text})")
 
     report = build_report(

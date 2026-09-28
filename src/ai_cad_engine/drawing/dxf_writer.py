@@ -38,16 +38,21 @@ class PlacedView:
     offset: tuple[float, float]  # model-space position of the view's origin
 
 
-def layout_third_angle(front: View, top: View, right: View, gap: float) -> list[PlacedView]:
-    """FRONT at origin, TOP above, RIGHT to the right, aligned per Y14.3."""
+def layout_third_angle(
+    front: View, top: View | None = None, right: View | None = None, gap: float = 0.0
+) -> list[PlacedView]:
+    """FRONT at origin, TOP above, RIGHT to the right, aligned per Y14.3.
+
+    Views share model coordinates along the aligned axis, so alignment is a pure
+    translation along the other axis.
+    """
     _, _, fx1, fy1 = front.bbox
-    _, ty0, _, _ = top.bbox
-    rx0, _, _, _ = right.bbox
-    return [
-        PlacedView(front, (0.0, 0.0)),
-        PlacedView(top, (0.0, fy1 + gap - ty0)),
-        PlacedView(right, (fx1 + gap - rx0, 0.0)),
-    ]
+    placed = [PlacedView(front, (0.0, 0.0))]
+    if top is not None:
+        placed.append(PlacedView(top, (0.0, fy1 + gap - top.bbox[1])))
+    if right is not None:
+        placed.append(PlacedView(right, (fx1 + gap - right.bbox[0], 0.0)))
+    return placed
 
 
 def layout_bbox(placed: list[PlacedView]) -> tuple[float, float, float, float]:
@@ -81,16 +86,30 @@ def new_doc(scale: float) -> ezdxf.document.Drawing:
         doc.linetypes.add(name, pattern=[sum(abs(v) for v in pattern), *pattern], description=desc)
     doc.layers.add("VISIBLE", color=7, lineweight=50)
     doc.layers.add("HIDDEN", color=8, linetype="HIDDEN", lineweight=25)
+    doc.layers.add("HATCH", color=8, lineweight=18)
     return doc
 
 
-def add_views(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> None:
+# ANSI31 (45 deg lines, general/cast iron) is defined at 0.125 in spacing; scale by S.
+HATCH_PATTERN = "ANSI31"
+
+
+def add_views(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale: float = 1.0) -> None:
     msp = doc.modelspace()
     for pv in placed:
         entities = []
         for layer, prims in (("VISIBLE", pv.view.visible), ("HIDDEN", pv.view.hidden)):
             for p in prims:
                 entities.append(_add(msp, p, pv.offset, layer))
+        ox, oy = pv.offset
+        for region in pv.view.hatches:
+            hatch = msp.add_hatch(dxfattribs={"layer": "HATCH"})
+            hatch.set_pattern_fill(HATCH_PATTERN, scale=scale)
+            for i, loop in enumerate(region):
+                hatch.paths.add_polyline_path(
+                    [(x + ox, y + oy) for x, y in loop], is_closed=True, flags=1 if i == 0 else 0
+                )
+            entities.append(hatch)
         doc.groups.new(f"VIEW_{pv.view.spec.name}").set_data(entities)
 
 

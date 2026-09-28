@@ -63,15 +63,17 @@ class Sheet:
         return (w - m - TB_W, m, w - m, m + TB_H)
 
 
-def fits(sheet: Sheet, model_w: float, model_h: float) -> bool:
+def fits(sheet: Sheet, model_w: float, model_h: float, allowance=ANNOT_ALLOWANCE) -> bool:
     x0, y0, x1, y1 = sheet.content_area()
-    al, ab, ar, at = ANNOT_ALLOWANCE
+    al, ab, ar, at = allowance
     need_w = model_w / sheet.scale + al + ar
     need_h = model_h / sheet.scale + ab + at
     return need_w <= x1 - x0 and need_h <= y1 - y0
 
 
-def choose_sheet(layout_size_at, sizes: tuple[str, ...] = ("B", "C", "D")) -> Sheet:
+def choose_sheet(
+    layout_size_at, sizes: tuple[str, ...] = ("B", "C", "D"), allowance=ANNOT_ALLOWANCE
+) -> Sheet:
     """Smallest sheet whose largest fitting standard scale is no smaller than 1:4.
 
     `layout_size_at(S)` returns the model (w, h) of the view layout for scale S
@@ -81,7 +83,7 @@ def choose_sheet(layout_size_at, sizes: tuple[str, ...] = ("B", "C", "D")) -> Sh
     for size in sizes:
         for s in STANDARD_SCALES:
             sheet = Sheet(size, s)
-            if fits(sheet, *layout_size_at(s)):
+            if fits(sheet, *layout_size_at(s), allowance):
                 if s <= MAX_PREFERRED_REDUCTION:
                     return sheet
                 fallback = fallback or sheet

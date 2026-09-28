@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import atan2, degrees, hypot
 
-from build123d import Edge, GeomType, Shape, Vector
+from build123d import Align, Box, Edge, GeomType, Location, Plane, Shape, Vector, Wire
 
 TOL = 1e-4  # geometric classification / dedupe tolerance, in the view's units
 _SAMPLES = 9
@@ -55,6 +55,16 @@ class ViewSpec:
     toward_viewer: tuple[float, float, float]  # unit vector from model to eye
     up: tuple[float, float, float]
 
+    @property
+    def right(self) -> Vector:
+        """Model direction that maps to +x on the view (matches the HLR projector)."""
+        return Vector(self.up).cross(Vector(self.toward_viewer))
+
+    @property
+    def plane(self) -> Plane:
+        """Plane whose local (x, y) are this view's 2D coordinates."""
+        return Plane(origin=(0, 0, 0), x_dir=self.right, z_dir=self.toward_viewer)
+
 
 # Z-up model, third-angle projection (ASME Y14.3).
 FRONT = ViewSpec("FRONT", (0, -1, 0), (0, 0, 1))
@@ -62,11 +72,16 @@ TOP = ViewSpec("TOP", (0, 0, 1), (0, 1, 0))
 RIGHT = ViewSpec("RIGHT", (1, 0, 0), (0, 0, 1))
 
 
+Loop = list[tuple[float, float]]
+
+
 @dataclass
 class View:
     spec: ViewSpec
     visible: list[Prim] = field(default_factory=list)
     hidden: list[Prim] = field(default_factory=list)
+    # Section faces: one entry per face, each a list of closed loops (outer first).
+    hatches: list[list[Loop]] = field(default_factory=list)
 
     @property
     def bbox(self) -> tuple[float, float, float, float]:
@@ -79,14 +94,85 @@ class View:
         return min(xs), min(ys), max(xs), max(ys)
 
 
-def project(shape: Shape, spec: ViewSpec) -> View:
+def project(shape: Shape, spec: ViewSpec, hidden_lines: bool = True) -> View:
     eye = Vector(spec.toward_viewer) * 10_000
     vis, hid = shape.project_to_viewport(eye, spec.up, look_at=(0, 0, 0))
     visible = _clean([_to_prim(e) for e in vis if e.length >= TOL])
-    hidden = _clean([_to_prim(e) for e in hid if e.length >= TOL])
+    hidden = _clean([_to_prim(e) for e in hid if e.length >= TOL]) if hidden_lines else []
     # HLR can emit a hidden edge exactly under a visible one; drop those.
     hidden = [p for p in hidden if not any(_covers(v, p) for v in visible)]
     return View(spec, visible, hidden)
+
+
+def half_section_cutter(spec: ViewSpec, size: float) -> Shape:
+    """Quarter-space box removing material toward the viewer on the view's upper half."""
+    loc = Plane(origin=(0, 0, 0), x_dir=spec.up, z_dir=spec.toward_viewer).location
+    return loc * Box(size, size, size, align=(Align.MIN, Align.CENTER, Align.MIN))
+
+
+def section(shape: Shape, spec: ViewSpec, cutter: Shape, half: bool = True) -> View:
+    """Section view: remove `cutter` from `shape`, project without hidden lines (ASME
+    practice for section views), and collect the cut faces as hatch loops.
+
+    Cut faces are the planar faces lying in the view plane through the model origin.
+    (A part with an original face exactly on that plane would be hatched too; none of
+    our families have one.)
+
+    `half`: the cutter is a `half_section_cutter`, whose boundary plane between the
+    sectioned and unsectioned halves is seen edge-on as lines on view y = 0. Y14.3 shows
+    that boundary as a centerline, not an object line, so those lines are dropped.
+    """
+    cut = shape.cut(cutter)
+    view = project(cut, spec, hidden_lines=False)
+    if half:
+        view.visible = [
+            p
+            for p in view.visible
+            if not (isinstance(p, Line) and abs(p.p1[1]) < TOL and abs(p.p2[1]) < TOL)
+        ]
+    n = Vector(spec.toward_viewer).normalized()
+    plane = spec.plane
+    for face in cut.faces().filter_by(GeomType.PLANE):
+        if abs(abs(face.normal_at().dot(n)) - 1) > 1e-6 or abs(face.center().dot(n)) > 1e-6:
+            continue
+        local = plane.to_local_coords(face)
+        loops = [_chain(w) for w in [local.outer_wire(), *local.inner_wires()]]
+        view.hatches.append(loops)
+    if not view.hatches:
+        raise ValueError("section produced no cut faces")
+    return view
+
+
+def _chain(wire: Wire) -> Loop:
+    """Ordered closed point loop from a wire (curves discretised; lines exact)."""
+    pieces = []
+    for e in wire.edges():
+        if e.geom_type == GeomType.LINE:
+            pts = [e.start_point(), e.end_point()]
+        else:
+            pts = [e.position_at(i / 32) for i in range(33)]
+        pieces.append([(p.X, p.Y) for p in pts])
+    loop = pieces.pop(0)
+    while pieces:
+        end = loop[-1]
+        for i, pc in enumerate(pieces):
+            if _same_pt(pc[0], end):
+                loop += pc[1:]
+                break
+            if _same_pt(pc[-1], end):
+                loop += pc[::-1][1:]
+                break
+        else:
+            raise ValueError("wire edges do not chain")
+        pieces.pop(i)
+    if _same_pt(loop[0], loop[-1]):
+        loop.pop()
+    return loop
+
+
+def loop_area(loop: Loop) -> float:
+    """Unsigned shoelace area."""
+    return abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(loop, loop[1:] + loop[:1]))) / 2
 
 
 def _clean(prims: list[Prim]) -> list[Prim]:
@@ -275,4 +361,9 @@ def scale_view(view: View, k: float) -> View:
             return Arc(pt(p.center), p.radius * k, p.start_angle, p.end_angle)
         return Polyline(tuple(pt(q) for q in p.points))
 
-    return View(view.spec, [sc(p) for p in view.visible], [sc(p) for p in view.hidden])
+    return View(
+        view.spec,
+        [sc(p) for p in view.visible],
+        [sc(p) for p in view.hidden],
+        [[[pt(q) for q in loop] for loop in region] for region in view.hatches],
+    )

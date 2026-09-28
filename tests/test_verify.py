@@ -4,20 +4,23 @@ from dataclasses import replace
 import ezdxf
 import pytest
 
-from ai_cad_engine.drawing.annotate import annotate_flange
+from ai_cad_engine.drawing import flange_drawing as fd
 from ai_cad_engine.drawing.make import make_drawing
 from ai_cad_engine.parts.weld_neck_flange import build_weld_neck_flange, critical_dims, measure
 from ai_cad_engine.standards.asme_b16_5 import WN_4_150 as F, flange_title_block
 from ai_cad_engine.verify import APPID, _fmt_inch, _number_in, build_report
 
-DRAWN = {"od", "bolt_circle", "bolt_hole_dia", "bolt_hole_count", "thickness", "length_through_hub"}
+DRAWN = {i.key for i in critical_dims(F)} - {"bolt_hole_offset"}
 
 
 def run(f, tmp_path, name="f"):
     """Build part + drawing for table entry f, verify against the TRUE table (F)."""
     part = build_weld_neck_flange(f)
     path = tmp_path / f"{name}.dxf"
-    make_drawing(part, annotate_flange, flange_title_block(f), path)
+    make_drawing(
+        fd.flange_views(part), fd.annotate_flange, flange_title_block(f), path,
+        view_gap=fd.VIEW_GAP, allowance=fd.ALLOWANCE,
+    )
     return build_report("test", "ASME B16.5", critical_dims(F), measure(part), path), path
 
 
@@ -90,11 +93,17 @@ def test_tampered_display_text_fails(good, tmp_path):
     assert i.drawing_pass is False
 
 
-def test_hub_and_rf_errors_caught_on_model(tmp_path):
+def test_hub_and_rf_errors_caught_on_model_and_drawing(tmp_path):
     rep, _ = run(replace(F, hub_dia_base=F.hub_dia_base + 0.5, raised_face_height=F.raised_face_height + 0.5), tmp_path)
-    failed = {i.key for i in rep.items if not i.passed}
-    # RF height change also moves the flange body; thickness and length are fixed in the builder.
-    assert {"hub_dia_base", "raised_face_height"} <= failed
+    items = by_key(rep)
+    for k in ("hub_dia_base", "raised_face_height"):
+        assert not items[k].model_pass and items[k].drawing_pass is False, k
+
+
+def test_wrong_bore_caught_on_half_dimension(tmp_path):
+    rep, _ = run(replace(F, bore=F.bore - 0.5), tmp_path)
+    i = by_key(rep)["bore"]
+    assert i.drawing == pytest.approx(F.bore - 0.5, abs=1e-6) and i.drawing_pass is False
 
 
 @pytest.mark.parametrize(

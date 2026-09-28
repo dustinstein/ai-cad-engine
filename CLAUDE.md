@@ -54,8 +54,12 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
 - `src/ai_cad_engine/drawing/dxf_writer.py` — doc setup (units, linetypes), third-angle layout, view writer.
 - `src/ai_cad_engine/drawing/sheet.py` — ANSI sizes, scale/sheet choice, border, title block, notes.
-- `src/ai_cad_engine/drawing/annotate.py` — role-based feature finding, centerlines, DIMENSION entities.
-- `src/ai_cad_engine/drawing/make.py` — `make_drawing(part, annotator, title_block, path)` pipeline.
+- `src/ai_cad_engine/drawing/annotate.py` — generic: dimstyle, `Annotator` (centerlines, tagged linear /
+  diameter / half dims), `find_bolt_pattern`.
+- `src/ai_cad_engine/drawing/flange_drawing.py` — flange views (half section + face), section profile
+  finder, flange dimension layout, per-family `ALLOWANCE` / `VIEW_GAP`.
+- `src/ai_cad_engine/drawing/make.py` — `make_drawing(views_mm, annotate, title_block, path, view_gap,
+  allowance)` pipeline: inch conversion, third-angle layout, sheet choice, DXF.
 - `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf,verify.json}`; prints the report table and
   exits 1 on verification failure. `out/*.step|dxf|verify.json` committed for Alibre checks.
 - Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`.
@@ -66,9 +70,21 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - B16.5 Class 150/300: 0.06" RF treated as INCLUDED in C (thickness) and Y (length through hub),
   per the commonly published tables. **Confirmed by user** against their B16.5 edition.
 - Weld-neck v0 simplifications: straight hub taper, no r1 fillet, no weld bevel, no RF serration.
-- Drawing: third-angle projection (ASME Y14.3). Z-up model; FRONT = viewer at -Y, TOP = +Z, RIGHT = +X.
-  View 2D coords = model coords projected (camera looks at model origin) → view↔model is a pure axis
-  map; layout applies only a translation per view.
+- Drawing: third-angle projection (ASME Y14.3). Views are FRONT / optional TOP / optional RIGHT; each
+  family picks its ViewSpecs. View 2D coords = model coords projected (camera looks at model origin;
+  view x = up × toward, y = up) → view↔model is a pure axis map; layout only translates views.
+- Flange drawing = 2 views (the 3rd added nothing for a revolved part and cost sheet space):
+  FRONT = half-section profile, axis horizontal, RF face left, hub right, upper half sectioned;
+  RIGHT = face view from the hub end, true orientation. The sectioned copy is rotated so a MEASURED
+  bolt hole lies in the cutting plane (Y14.3 aligned-section convention: revolve features into the
+  plane). No cutting-plane line: Y14.3 allows omitting it when the plane is the obvious symmetry axis.
+- Section views: `views.section()` cuts with a quarter-space box, projects without hidden lines
+  (ASME practice), hatches the planar faces lying in the view plane through the origin (ANSI31, layer
+  HATCH, scale S), and drops object lines on the half-section boundary (y=0) — Y14.3 shows that
+  boundary as a centerline. Test: hatch area equals the section area computed by hand from table values.
+- Half dimensions (bore in a half section): `HALF_DIM` override = dimsd2/dimse2 + dimblk2 "NONE"
+  (ezdxf still draws arrow 2 unless its block is NONE). Measurement stays the full diameter; the
+  mirrored defpoint uses the axis found from the view's OD extents.
 - HLR cleanup is mandatory: OCC returns straight silhouettes as B-splines, splits edges at cylinder
   seams, and emits hidden edges under visible ones. We normalise to exact LINE/CIRCLE/ARC, merge
   collinear lines, and drop covered hidden prims (in mm, before unit conversion). Tests assert views
@@ -92,6 +108,7 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   off-axis circles, view extents, full-width face), never to table values, and text uses `<>` so the
   DXF shows the measured value. Tests compare DIMENSION measurements to the standard, and a negative
   test proves a 0.5 mm error shows up on the drawing.
+- Known cosmetic limit: at 1:2 the .060 RF-height extension line sits 0.03" from the flange front face.
 - Readability test: dimension text boxes (estimated from char height × count, ezdxf's MTEXT bbox is
   unreliable) must not touch other dims' lines, other dim text, or part geometry. Verified it catches
   a real overlap (.940 text crossing the 3.000 dim line). Dimension placement is still hand-tuned per
@@ -122,5 +139,7 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - [x] Step 4: inch units + ANSI B sheet, auto scale (1:2 for the flange), border, title block, notes,
       readability + containment tests. Confirmed in Alibre (inch, values, title block, dashed lines).
 - [x] Step 5: verification report (12 critical dims; 6 checked on the drawing), JSON + table, exit code.
-- [ ] Next candidates: dimension bore/RF/hub on the drawing (half-section view is the natural place);
-      B16.5 table for more sizes/classes + eval set; DWG export via ODA; second part family.
+- [x] Step 6: half-section profile + face view; all 11 length/count critical dims on the drawing
+      (only bolt-hole orientation remains model-only). Awaiting Alibre check.
+- [ ] Next candidates: B16.5 table for more sizes/classes + eval set; DWG export via ODA; second part
+      family; angular dim for hole orientation.

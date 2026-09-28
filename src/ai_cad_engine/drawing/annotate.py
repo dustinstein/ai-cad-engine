@@ -1,30 +1,24 @@
-"""Centerlines and DIMENSION entities.
+"""Generic annotation helpers: dimstyle, centerlines, tagged DIMENSION entities,
+and role-based feature finders shared by part families.
 
 Dimension defpoints are snapped to features found in the projected geometry
-by *role* (largest circle, off-axis circles, view extents, full-width faces),
-never to table values. The DXF DIMENSION therefore reports what was actually
-drawn, and tests compare those measurements against the standard.
+by *role* (largest circle, off-axis circles, view extents, faces), never to
+table values. The DXF DIMENSION therefore reports what was actually drawn.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import cos, hypot, radians, sin
 
 import ezdxf.document
 
-from ai_cad_engine.drawing.dxf_writer import PlacedView
-from ai_cad_engine.drawing.views import TOL, Circle, Line, View
+from ai_cad_engine.drawing.views import TOL, Circle, View
 from ai_cad_engine.verify import tag_dimension
 
 DIMSTYLE = "ENGINE_IN"
-
-# Paper inches; multiplied by the drawing scale S when placed.
-CL_OVERSHOOT = 0.125  # centerline extension past the feature
-LIN_DIM_OFFSETS = (0.4, 1.1)  # first/second dim line from the view; room for pushed-out text
-OD_LEADER_OUT = 0.5
-BC_LEADER_OUT = 0.75
-HOLE_LEADER_OUT = 0.4
+CL_OVERSHOOT = 0.125  # paper inches: centerline extension past the feature
+HALF_DIM = {"dimsd2": 1, "dimse2": 1, "dimsah": 1, "dimblk1": "", "dimblk2": "NONE"}
 
 
 def setup(doc: ezdxf.document.Drawing, scale: float) -> None:
@@ -43,7 +37,7 @@ def setup(doc: ezdxf.document.Drawing, scale: float) -> None:
     style.dxf.dimdec = 3
     style.dxf.dimzin = 4  # suppress leading zero
     style.dxf.dimlfac = 1.0
-    style.dxf.dimtad = 1
+    style.dxf.dimtad = 0  # text centered in the (broken) dimension line
     style.dxf.dimtih = 1
     style.dxf.dimtoh = 1
     style.dxf.dimtofl = 0  # diameter dims with text outside: leader only, no line through center
@@ -51,19 +45,100 @@ def setup(doc: ezdxf.document.Drawing, scale: float) -> None:
     style.dxf.dimblk = ""  # closed filled arrows
 
 
+Pt = tuple[float, float]
+
+
+@dataclass
+class Annotator:
+    """Adds centerlines and tagged dimensions in model space; lengths given in paper inches
+    are multiplied by the scale S. Collects entities per view for DXF groups."""
+
+    doc: ezdxf.document.Drawing
+    S: float
+    groups: dict[str, list] = field(default_factory=dict)
+
+    def __post_init__(self):
+        setup(self.doc, self.S)
+        self.msp = self.doc.modelspace()
+
+    def _keep(self, view: str, e):
+        self.groups.setdefault(view, []).append(e)
+        return e
+
+    def centerline(self, view: str, p1: Pt, p2: Pt):
+        return self._keep(view, self.msp.add_line(p1, p2, dxfattribs={"layer": "CENTER"}))
+
+    def circle_centerline(self, view: str, c: Pt, r: float):
+        return self._keep(view, self.msp.add_circle(c, r, dxfattribs={"layer": "CENTER"}))
+
+    def linear(
+        self,
+        view: str,
+        key: str,
+        p1: Pt,
+        p2: Pt,
+        base: Pt,
+        angle: float,
+        text: str = "<>",
+        location: Pt | None = None,
+        override: dict | None = None,
+    ):
+        d = self.msp.add_linear_dim(
+            base=base,
+            p1=p1,
+            p2=p2,
+            angle=angle,
+            text=text,
+            location=location,
+            dimstyle=DIMSTYLE,
+            override=override,
+            dxfattribs={"layer": "DIM"},
+        )
+        d.render()
+        tag_dimension(d.dimension, key)
+        return self._keep(view, d.dimension)
+
+    def diameter(
+        self,
+        view: str,
+        key: str,
+        c: Pt,
+        r: float,
+        angle_deg: float,
+        out_paper: float,
+        text: str = "<>",
+        count_key: str | None = None,
+    ):
+        """Leader-style diameter dimension; text outside the circle along angle_deg."""
+        a = radians(angle_deg)
+        dist = r + out_paper * self.S
+        loc = (c[0] + dist * cos(a), c[1] + dist * sin(a))
+        d = self.msp.add_diameter_dim(
+            center=c, radius=r, location=loc, text=text, dimstyle=DIMSTYLE, dxfattribs={"layer": "DIM"}
+        )
+        d.render()
+        tag_dimension(d.dimension, key, count_key)
+        return self._keep(view, d.dimension)
+
+    def finish(self) -> None:
+        for view, ents in self.groups.items():
+            self.doc.groups.new(f"ANNOT_{view}").set_data(ents)
+
+
 # ---- feature finding (by role) -------------------------------------------------
 
 
 @dataclass(frozen=True)
 class BoltPattern:
-    center: tuple[float, float]
+    center: Pt
     od_radius: float
     hole_radius: float
-    hole_centers: list[tuple[float, float]]
+    hole_centers: list[Pt]
     bc_radius: float
 
 
 def find_bolt_pattern(view: View) -> BoltPattern:
+    """Largest visible circle = OD; off-center circles of one size on one circle = bolt holes."""
     circles = [p for p in view.visible if isinstance(p, Circle)]
     od = max(circles, key=lambda c: c.radius)
     cx, cy = od.center
@@ -81,141 +156,3 @@ def find_bolt_pattern(view: View) -> BoltPattern:
         hole_centers=[c.center for c in holes],
         bc_radius=sum(dists) / len(dists),
     )
-
-
-@dataclass(frozen=True)
-class AxialProfile:
-    axis_x: float
-    y_min: float
-    y_max: float
-    bottom_pt: tuple[float, float]  # leftmost point on the contact face (y_min)
-    top_pt: tuple[float, float]  # leftmost point on the far end (y_max)
-    back_face_pt: tuple[float, float]  # leftmost point on the flange back face
-
-
-def find_axial_profile(view: View) -> AxialProfile:
-    x0, y0, x1, y1 = view.bbox
-    horiz = [
-        ln for ln in view.visible if isinstance(ln, Line) and abs(ln.p1[1] - ln.p2[1]) < TOL
-    ]
-
-    def left(ln: Line) -> tuple[float, float]:
-        return min(ln.p1, ln.p2)
-
-    bottom = min((ln for ln in horiz if abs(ln.p1[1] - y0) < TOL), key=lambda ln: left(ln)[0])
-    top = min((ln for ln in horiz if abs(ln.p1[1] - y1) < TOL), key=lambda ln: left(ln)[0])
-    full = [ln for ln in horiz if abs(abs(ln.p2[0] - ln.p1[0]) - (x1 - x0)) < TOL]
-    if not full:
-        raise ValueError("no full-width face found for flange thickness")
-    back = max(full, key=lambda ln: ln.p1[1])
-    return AxialProfile(
-        axis_x=(x0 + x1) / 2,
-        y_min=y0,
-        y_max=y1,
-        bottom_pt=left(bottom),
-        top_pt=left(top),
-        back_face_pt=left(back),
-    )
-
-
-# ---- annotation ----------------------------------------------------------------
-
-
-def _off(pt: tuple[float, float], o: tuple[float, float]) -> tuple[float, float]:
-    return (pt[0] + o[0], pt[1] + o[1])
-
-
-def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale: float) -> None:
-    S = scale
-    setup(doc, S)
-    msp = doc.modelspace()
-    by_name = {pv.view.spec.name: pv for pv in placed}
-    dim_attrs = {"layer": "DIM"}
-    cl_attrs = {"layer": "CENTER"}
-
-    # TOP: bolt pattern
-    top = by_name["TOP"]
-    bp = find_bolt_pattern(top.view)
-    c = _off(bp.center, top.offset)
-    ents = []
-    ext = bp.od_radius + CL_OVERSHOOT * S
-    ents.append(msp.add_line((c[0] - ext, c[1]), (c[0] + ext, c[1]), dxfattribs=cl_attrs))
-    ents.append(msp.add_line((c[0], c[1] - ext), (c[0], c[1] + ext), dxfattribs=cl_attrs))
-    ents.append(msp.add_circle(c, bp.bc_radius, dxfattribs=cl_attrs))
-    for hc in bp.hole_centers:
-        h = _off(hc, top.offset)
-        ux, uy = (h[0] - c[0]) / bp.bc_radius, (h[1] - c[1]) / bp.bc_radius
-        e = bp.hole_radius + CL_OVERSHOOT * S / 2
-        ents.append(
-            msp.add_line(
-                (h[0] - ux * e, h[1] - uy * e), (h[0] + ux * e, h[1] + uy * e), dxfattribs=cl_attrs
-            )
-        )
-
-    def dia(key, center, r, angle_deg, text, out, count_key=None):
-        a = radians(angle_deg)
-        loc = (center[0] + (r + out) * cos(a), center[1] + (r + out) * sin(a))
-        d = msp.add_diameter_dim(
-            center=center, radius=r, location=loc, text=text, dimstyle=DIMSTYLE, dxfattribs=dim_attrs
-        )
-        d.render()
-        tag_dimension(d.dimension, key, count_key)
-        return d.dimension
-
-    ents.append(dia("od", c, bp.od_radius, 135, "<>", OD_LEADER_OUT * S))
-    ents.append(dia("bolt_circle", c, bp.bc_radius, 45, "<> B.C.", bp.od_radius - bp.bc_radius + BC_LEADER_OUT * S))
-    # Hole callout on the hole nearest 67.5 deg (upper right), leader pointing outward.
-    h = max(bp.hole_centers, key=lambda p: p[1] + 0.4 * p[0])
-    hs = _off(h, top.offset)
-    ang = _deg(hs[0] - c[0], hs[1] - c[1])
-    ents.append(
-        dia(
-            "bolt_hole_dia",
-            hs,
-            bp.hole_radius,
-            ang,
-            f"{len(bp.hole_centers)}X <> THRU",
-            bp.od_radius - bp.bc_radius + HOLE_LEADER_OUT * S,
-            count_key="bolt_hole_count",
-        )
-    )
-    doc.groups.new("ANNOT_TOP").set_data(ents)
-
-    # FRONT / RIGHT: axis centerline
-    for name in ("FRONT", "RIGHT"):
-        pv = by_name[name]
-        prof = find_axial_profile(pv.view)
-        x = prof.axis_x + pv.offset[0]
-        ents = [
-            msp.add_line(
-                (x, prof.y_min + pv.offset[1] - CL_OVERSHOOT * S),
-                (x, prof.y_max + pv.offset[1] + CL_OVERSHOOT * S),
-                dxfattribs=cl_attrs,
-            )
-        ]
-        if name == "FRONT":
-            x0 = pv.view.bbox[0] + pv.offset[0]
-
-            def vdim(key, p1, p2, dx):
-                d = msp.add_linear_dim(
-                    base=(x0 - dx, p1[1]),
-                    p1=p1,
-                    p2=p2,
-                    angle=90,
-                    dimstyle=DIMSTYLE,
-                    dxfattribs=dim_attrs,
-                )
-                d.render()
-                tag_dimension(d.dimension, key)
-                return d.dimension
-
-            b = _off(prof.bottom_pt, pv.offset)
-            ents.append(vdim("thickness", b, _off(prof.back_face_pt, pv.offset), LIN_DIM_OFFSETS[0] * S))
-            ents.append(vdim("length_through_hub", b, _off(prof.top_pt, pv.offset), LIN_DIM_OFFSETS[1] * S))
-        doc.groups.new(f"ANNOT_{name}").set_data(ents)
-
-
-def _deg(dx: float, dy: float) -> float:
-    from math import atan2, degrees
-
-    return degrees(atan2(dy, dx))
