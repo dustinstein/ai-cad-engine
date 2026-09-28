@@ -1,14 +1,15 @@
-"""Build the NPS 4 Class 150 weld-neck flange; export STEP and a dimensioned 3-view DXF."""
+"""Build the NPS 4 Class 150 weld-neck flange; export STEP and a dimensioned ANSI drawing (DXF)."""
 
+from datetime import date
 from pathlib import Path
 
 from build123d import Unit, export_step
 
 from ai_cad_engine.drawing.annotate import annotate_flange
-from ai_cad_engine.drawing.dxf_writer import layout_third_angle, write_dxf
-from ai_cad_engine.drawing.views import FRONT, RIGHT, TOP, project
+from ai_cad_engine.drawing.make import make_drawing
+from ai_cad_engine.drawing.sheet import TitleBlock
 from ai_cad_engine.parts.weld_neck_flange import build_weld_neck_flange
-from ai_cad_engine.standards.asme_b16_5 import WN_4_150
+from ai_cad_engine.standards.asme_b16_5 import WN_4_150, flange_title_block
 
 OUT = Path(__file__).resolve().parents[1] / "out"
 
@@ -25,9 +26,9 @@ def main() -> None:
     print(f"  volume mm^3: {flange.volume:.1f}")
 
     dxf = OUT / "flange_4in_150.dxf"
-    views = [project(flange, s) for s in (FRONT, TOP, RIGHT)]
-    write_dxf(layout_third_angle(*views), dxf, annotate=annotate_flange)
-    print(f"wrote {dxf}")
+    tb: TitleBlock = flange_title_block(WN_4_150, date=date.today().isoformat())
+    res = make_drawing(flange, annotate_flange, tb, dxf)
+    print(f"wrote {dxf}  (ANSI {res.sheet.size}, {res.sheet.scale_text})")
 
 
 if __name__ == "__main__":

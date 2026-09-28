@@ -50,8 +50,10 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - `src/ai_cad_engine/parts/` — deterministic part builders from table entries.
 - `src/ai_cad_engine/measure.py` — solid measurement helpers (seed of the verification loop).
 - `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
-- `src/ai_cad_engine/drawing/dxf_writer.py` — third-angle layout + ezdxf DXF writer.
+- `src/ai_cad_engine/drawing/dxf_writer.py` — doc setup (units, linetypes), third-angle layout, view writer.
+- `src/ai_cad_engine/drawing/sheet.py` — ANSI sizes, scale/sheet choice, border, title block, notes.
 - `src/ai_cad_engine/drawing/annotate.py` — role-based feature finding, centerlines, DIMENSION entities.
+- `src/ai_cad_engine/drawing/make.py` — `make_drawing(part, annotator, title_block, path)` pipeline.
 - `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf}`. `out/*.step|dxf` committed for Alibre checks.
 - Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`.
 
@@ -63,25 +65,37 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - Weld-neck v0 simplifications: straight hub taper, no r1 fillet, no weld bevel, no RF serration.
 - Drawing: third-angle projection (ASME Y14.3). Z-up model; FRONT = viewer at -Y, TOP = +Z, RIGHT = +X.
   View 2D coords = model coords projected (camera looks at model origin) → view↔model is a pure axis
-  map; layout applies only a translation per view. Drawn 1:1 in mm in model space (sheet/paperspace later).
+  map; layout applies only a translation per view.
 - HLR cleanup is mandatory: OCC returns straight silhouettes as B-splines, splits edges at cylinder
   seams, and emits hidden edges under visible ones. We normalise to exact LINE/CIRCLE/ARC, merge
-  collinear lines, and drop covered hidden prims. Tests assert DXF contains only LINE/CIRCLE/ARC.
-- DXF: R2018, $INSUNITS=4 (mm). Layers VISIBLE / HIDDEN. Own HIDDEN linetype (3 mm dash, 1.5 mm gap);
-  ezdxf's stock patterns are inch-sized and have no HIDDEN. Each view is a DXF GROUP `VIEW_<NAME>`;
-  annotations per view are in `ANNOT_<NAME>`. Layers CENTER (own CENTER_MM linetype) and DIM.
-- Dimensions: real DIMENSION entities, rendered (geometry block present), dimstyle `ENGINE_MM`
-  (3.5 mm text, 2 decimals, dimlfac 1, horizontal text, leader-style diameters via dimtofl=0).
-  Don't use ezdxf's EZ_* dimstyles — they're scaled for other units (EZ_RADIUS shows 20 mm as "2000").
+  collinear lines, and drop covered hidden prims (in mm, before unit conversion). Tests assert views
+  contain only LINE/CIRCLE/ARC.
+- **Drawing units: INCH** (user decision). Model/solid/STEP stay mm; views are scaled by 1/25.4 after
+  HLR. DXF $INSUNITS=1, $MEASUREMENT=0, so measuring in CAD matches dimension text.
+- **Sheets: ANSI (Y14.1)**, single model space (no paper-space viewports; importers handle model space
+  best). Geometry at true size; border/title block/notes drawn ×S (S = scale denominator, 1:S).
+  Paper-sized things (text, dash lengths, offsets) are defined in paper inches ×S. Linetype patterns
+  are baked at S (not via $LTSCALE, which importers may ignore). Sheet choice: smallest of B→C→D whose
+  largest fitting standard scale (1,2,4,8,16) is ≥ 1:4. Fit uses a per-side annotation allowance
+  (left, bottom, right, top); a test asserts everything lands inside the content area.
+- DXF: R2018. Layers VISIBLE / HIDDEN / CENTER / DIM / BORDER / TITLE. Groups: `VIEW_<NAME>`,
+  `ANNOT_<NAME>`, `SHEET`. Only standard linetype names (HIDDEN, CENTER) — Alibre maps linetypes by
+  name and imports unknown names solid; ezdxf's stock HIDDEN doesn't exist and its patterns are tiny.
+- Dimensions: real DIMENSION entities, rendered (geometry block present), dimstyle `ENGINE_IN`:
+  .125 text (Y14.2 min), 3 decimals, no leading zero (.750), dimscale=S, horizontal text,
+  leader-style diameters (dimtofl=0). Don't use ezdxf's EZ_* dimstyles (scaled for other units).
+  ezdxf can't render DIMALT (dual units) — irrelevant now that we're inch-only.
 - Dimension defpoints are snapped to features found in the drawn views **by role** (largest circle,
   off-axis circles, view extents, full-width face), never to table values, and text uses `<>` so the
   DXF shows the measured value. Tests compare DIMENSION measurements to the standard, and a negative
   test proves a 0.5 mm error shows up on the drawing.
-- **Open item:** dimension units — mm only for now. ezdxf does not render DIMALT (dual units) into the
-  dimension block. Oilfield drawings are often inch; user to choose mm / inch / dual.
-- Text height 3.5 mm is at 1:1 model space; revisit when the sheet/scale step lands.
-- Linetypes: Alibre maps by NAME (custom "CENTER_MM" imported solid; "HIDDEN" worked). Only use
-  standard names (HIDDEN, CENTER, ...) and override their patterns for mm. Test enforces this.
+- Readability test: dimension text boxes (estimated from char height × count, ezdxf's MTEXT bbox is
+  unreliable) must not touch other dims' lines, other dim text, or part geometry. Verified it catches
+  a real overlap (.940 text crossing the 3.000 dim line). Dimension placement is still hand-tuned per
+  part family; general placement/collision avoidance is future work.
+- Title block: TITLE / DWG NO / REV / SIZE / SHEET / SCALE / UNITS / PROJECTION / DRAWN / DATE /
+  MATERIAL. Material left blank (not invented). Notes cite ASME B16.5 for dims+tolerances and flag the
+  drawing as machine-generated. Values shrink to fit their cell (tested).
 - Alibre V28's DXF **and DWG** import converts ALL dimensions to notes/text, including its own
   exported dims (verified by round-trip of both formats). DWG does not help for Alibre. Not a defect in our DXF. So: Alibre is a valid check for geometry,
   scale, layers, linetypes, and dimension VALUES, but not for DIMENSION entity fidelity. Use a
@@ -92,4 +106,7 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF. Confirmed in Alibre (1:1 mm, dashed hidden, BC, layers).
 - [x] Step 3: centerlines + DIMENSION entities (OD, BC, 8X hole, thickness, overall length).
       Alibre: values + Ø correct; dims → notes is Alibre's importer (see above); centerlines fixed.
-- [ ] Next candidates: sheet + title block + scale; verification report; hub/RF dims; units decision.
+- [x] Step 4: inch units + ANSI B sheet, auto scale (1:2 for the flange), border, title block, notes,
+      readability + containment tests. Awaiting Alibre check.
+- [ ] Next candidates: verification report (per-dim pass/fail, JSON + on-drawing); hub/RF/bore dims;
+      DWG export via ODA; second part family (e.g. blind flange, lifting lug).

@@ -16,32 +16,35 @@ import ezdxf.document
 from ai_cad_engine.drawing.dxf_writer import PlacedView
 from ai_cad_engine.drawing.views import TOL, Circle, Line, View
 
-DIMSTYLE = "ENGINE_MM"
-# Centerline at 1:1 mm: long 12, gap 3, short 3, gap 3.
-CENTER_PATTERN = (21.0, 12.0, -3.0, 3.0, -3.0)
-CL_OVERSHOOT = 6.0  # centerline extension past the feature, mm
+DIMSTYLE = "ENGINE_IN"
+
+# Paper inches; multiplied by the drawing scale S when placed.
+CL_OVERSHOOT = 0.125  # centerline extension past the feature
+LIN_DIM_OFFSETS = (0.4, 1.1)  # first/second dim line from the view; room for pushed-out text
+OD_LEADER_OUT = 0.5
+BC_LEADER_OUT = 0.75
+HOLE_LEADER_OUT = 0.4
 
 
-def setup(doc: ezdxf.document.Drawing) -> None:
-    # Must use the standard name: Alibre maps linetypes by NAME and ignores unknown ones
-    # (a custom "CENTER_MM" imported solid). Replace ezdxf's inch-sized CENTER in place.
-    doc.linetypes.remove("CENTER")
-    doc.linetypes.add("CENTER", pattern=list(CENTER_PATTERN), description="Center ____ _ ____")
+def setup(doc: ezdxf.document.Drawing, scale: float) -> None:
     doc.layers.add("CENTER", color=1, linetype="CENTER", lineweight=25)
     doc.layers.add("DIM", color=3, lineweight=25)
     # Own style: ezdxf's EZ_* styles are scaled for other units (e.g. EZ_RADIUS shows 20 mm as 2000).
+    # ASME Y14.5 inch conventions: 3 decimals, no leading zero (.750), horizontal text.
     style = doc.dimstyles.new(DIMSTYLE)
-    style.dxf.dimtxt = 3.5  # text height
-    style.dxf.dimasz = 3.0  # arrow size
-    style.dxf.dimexo = 1.5  # extension line offset from geometry
-    style.dxf.dimexe = 2.0  # extension past dimension line
-    style.dxf.dimgap = 1.0
-    style.dxf.dimdec = 2
-    style.dxf.dimzin = 0  # keep trailing zeros; checking to 0.01 mm
+    style.dxf.dimtxt = 0.125  # paper text height
+    style.dxf.dimasz = 0.125
+    style.dxf.dimexo = 0.0625
+    style.dxf.dimexe = 0.125
+    style.dxf.dimgap = 0.0625
+    style.dxf.dimscale = scale  # all of the above are paper sizes
+    style.dxf.dimlunit = 2  # decimal
+    style.dxf.dimdec = 3
+    style.dxf.dimzin = 4  # suppress leading zero
     style.dxf.dimlfac = 1.0
-    style.dxf.dimtad = 1  # text above dimension line
-    style.dxf.dimtih = 1  # horizontal text inside (ASME unidirectional)
-    style.dxf.dimtoh = 1  # horizontal text outside
+    style.dxf.dimtad = 1
+    style.dxf.dimtih = 1
+    style.dxf.dimtoh = 1
     style.dxf.dimtofl = 0  # diameter dims with text outside: leader only, no line through center
     style.dxf.dimdsep = ord(".")
     style.dxf.dimblk = ""  # closed filled arrows
@@ -121,8 +124,9 @@ def _off(pt: tuple[float, float], o: tuple[float, float]) -> tuple[float, float]
     return (pt[0] + o[0], pt[1] + o[1])
 
 
-def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> None:
-    setup(doc)
+def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale: float) -> None:
+    S = scale
+    setup(doc, S)
     msp = doc.modelspace()
     by_name = {pv.view.spec.name: pv for pv in placed}
     dim_attrs = {"layer": "DIM"}
@@ -133,14 +137,14 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> No
     bp = find_bolt_pattern(top.view)
     c = _off(bp.center, top.offset)
     ents = []
-    ext = bp.od_radius + CL_OVERSHOOT
+    ext = bp.od_radius + CL_OVERSHOOT * S
     ents.append(msp.add_line((c[0] - ext, c[1]), (c[0] + ext, c[1]), dxfattribs=cl_attrs))
     ents.append(msp.add_line((c[0], c[1] - ext), (c[0], c[1] + ext), dxfattribs=cl_attrs))
     ents.append(msp.add_circle(c, bp.bc_radius, dxfattribs=cl_attrs))
     for hc in bp.hole_centers:
         h = _off(hc, top.offset)
         ux, uy = (h[0] - c[0]) / bp.bc_radius, (h[1] - c[1]) / bp.bc_radius
-        e = bp.hole_radius + CL_OVERSHOOT / 2
+        e = bp.hole_radius + CL_OVERSHOOT * S / 2
         ents.append(
             msp.add_line(
                 (h[0] - ux * e, h[1] - uy * e), (h[0] + ux * e, h[1] + uy * e), dxfattribs=cl_attrs
@@ -156,14 +160,20 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> No
         d.render()
         return d.dimension
 
-    ents.append(dia(c, bp.od_radius, 135, "<>", 20))
-    ents.append(dia(c, bp.bc_radius, 45, "<> B.C.", bp.od_radius - bp.bc_radius + 30))
+    ents.append(dia(c, bp.od_radius, 135, "<>", OD_LEADER_OUT * S))
+    ents.append(dia(c, bp.bc_radius, 45, "<> B.C.", bp.od_radius - bp.bc_radius + BC_LEADER_OUT * S))
     # Hole callout on the hole nearest 67.5 deg (upper right), leader pointing outward.
     h = max(bp.hole_centers, key=lambda p: p[1] + 0.4 * p[0])
     hs = _off(h, top.offset)
     ang = _deg(hs[0] - c[0], hs[1] - c[1])
     ents.append(
-        dia(hs, bp.hole_radius, ang, f"{len(bp.hole_centers)}X <> THRU", bp.od_radius - bp.bc_radius + 12)
+        dia(
+            hs,
+            bp.hole_radius,
+            ang,
+            f"{len(bp.hole_centers)}X <> THRU",
+            bp.od_radius - bp.bc_radius + HOLE_LEADER_OUT * S,
+        )
     )
     doc.groups.new("ANNOT_TOP").set_data(ents)
 
@@ -174,8 +184,8 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> No
         x = prof.axis_x + pv.offset[0]
         ents = [
             msp.add_line(
-                (x, prof.y_min + pv.offset[1] - CL_OVERSHOOT),
-                (x, prof.y_max + pv.offset[1] + CL_OVERSHOOT),
+                (x, prof.y_min + pv.offset[1] - CL_OVERSHOOT * S),
+                (x, prof.y_max + pv.offset[1] + CL_OVERSHOOT * S),
                 dxfattribs=cl_attrs,
             )
         ]
@@ -195,8 +205,8 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView]) -> No
                 return d.dimension
 
             b = _off(prof.bottom_pt, pv.offset)
-            ents.append(vdim(b, _off(prof.back_face_pt, pv.offset), 12))
-            ents.append(vdim(b, _off(prof.top_pt, pv.offset), 26))
+            ents.append(vdim(b, _off(prof.back_face_pt, pv.offset), LIN_DIM_OFFSETS[0] * S))
+            ents.append(vdim(b, _off(prof.top_pt, pv.offset), LIN_DIM_OFFSETS[1] * S))
         doc.groups.new(f"ANNOT_{name}").set_data(ents)
 
 

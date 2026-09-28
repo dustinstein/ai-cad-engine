@@ -49,3 +49,20 @@ WN_4_150 = WeldNeckFlange(
     bore=4.026 * IN,
     bore_schedule="40",
 )
+
+
+def flange_title_block(f: WeldNeckFlange, date: str = ""):
+    """Title block text for a B16.5 weld-neck flange drawing."""
+    from ai_cad_engine.drawing.sheet import TitleBlock
+
+    return TitleBlock(
+        title=f"FLANGE, WELD NECK, RF, NPS {f.nps} CL{f.pressure_class}, SCH {f.bore_schedule} BORE",
+        dwg_no=f"WN-{f.nps}-{f.pressure_class}-RF",
+        date=date,
+        notes=(
+            "DIMENSIONS ARE IN INCHES.",
+            "DIMENSIONS AND TOLERANCES PER ASME B16.5.",
+            "RAISED FACE .06 INCLUDED IN FLANGE THICKNESS AND LENGTH THRU HUB.",
+            "MACHINE-GENERATED DRAWING. VERIFY BEFORE RELEASE.",
+        ),
+    )

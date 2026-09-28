@@ -15,7 +15,7 @@ from math import atan2, degrees, hypot
 
 from build123d import Edge, GeomType, Shape, Vector
 
-TOL = 1e-4  # mm, geometric classification / dedupe tolerance
+TOL = 1e-4  # geometric classification / dedupe tolerance, in the view's units
 _SAMPLES = 9
 
 
@@ -258,3 +258,21 @@ def _extent_points(p: Prim) -> list[tuple[float, float]]:
     sweep = (p.end_angle - p.start_angle) % 360
     angs += [q for q in (0, 90, 180, 270) if (q - p.start_angle) % 360 <= sweep]
     return [(cx + r * cos(radians(a)), cy + r * sin(radians(a))) for a in angs]
+
+
+def scale_view(view: View, k: float) -> View:
+    """Uniformly scale a view's 2D geometry (e.g. k = 1/25.4 for mm -> inch)."""
+
+    def pt(p: tuple[float, float]) -> tuple[float, float]:
+        return (p[0] * k, p[1] * k)
+
+    def sc(p: Prim) -> Prim:
+        if isinstance(p, Line):
+            return Line(pt(p.p1), pt(p.p2))
+        if isinstance(p, Circle):
+            return Circle(pt(p.center), p.radius * k)
+        if isinstance(p, Arc):
+            return Arc(pt(p.center), p.radius * k, p.start_angle, p.end_angle)
+        return Polyline(tuple(pt(q) for q in p.points))
+
+    return View(view.spec, [sc(p) for p in view.visible], [sc(p) for p in view.hidden])

@@ -1,6 +1,6 @@
 # ai-cad-engine
 
-Prompt/spec → dimensionally verified CAD: STEP solid + dimensioned DXF/DWG drawing.
+Prompt/spec → dimensionally verified CAD: STEP solid (mm) + dimensioned ANSI drawing (inch) as DXF/DWG.
 
 ```
 uv sync
