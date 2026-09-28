@@ -82,8 +82,8 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - Text height 3.5 mm is at 1:1 model space; revisit when the sheet/scale step lands.
 - Linetypes: Alibre maps by NAME (custom "CENTER_MM" imported solid; "HIDDEN" worked). Only use
   standard names (HIDDEN, CENTER, ...) and override their patterns for mm. Test enforces this.
-- Alibre V28's DXF import converts ALL dimensions to notes/text, including its own exported dims
-  (verified by round-trip). Not a defect in our DXF. So: Alibre is a valid check for geometry,
+- Alibre V28's DXF **and DWG** import converts ALL dimensions to notes/text, including its own
+  exported dims (verified by round-trip of both formats). DWG does not help for Alibre. Not a defect in our DXF. So: Alibre is a valid check for geometry,
   scale, layers, linetypes, and dimension VALUES, but not for DIMENSION entity fidelity. Use a
   second viewer that preserves dims (LibreCAD for DXF; DWG TrueView after DWG conversion).
 
