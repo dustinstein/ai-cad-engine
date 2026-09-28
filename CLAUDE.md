@@ -82,19 +82,14 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - Text height 3.5 mm is at 1:1 model space; revisit when the sheet/scale step lands.
 - Linetypes: Alibre maps by NAME (custom "CENTER_MM" imported solid; "HIDDEN" worked). Only use
   standard names (HIDDEN, CENTER, ...) and override their patterns for mm. Test enforces this.
-- **Open item:** Alibre V28 (double-click open) imports the flange drawing's DIMENSIONs as text.
-  Established: Alibre's own dim round-trips as a dim; OUR minimal file (1 horizontal linear dim,
-  layer 0, R2000) imports as a dim; full flange at R2000/R2010/R2018 → text. So it is something in
-  our flange file, not DXF version or ezdxf's DIMENSION encoding per se. Bisecting with
-  `scripts/diag_dxf_dims.py` → `out/diag/A..H` (one factor each: vertical, layer DIM, GROUP,
-  diameter default / text outside / custom text, flange without groups).
-  Alibre's own export (1 horizontal linear dim, R2018/AC1032): dimstyle Standard, layer DIMENSIONS,
-  dimtype 32, NON-anonymous geometry block "D1" (we write "*D1"), no groups, $INSUNITS=1 (inch).
-  Nothing there contradicts our working minimal file, so the matrix results decide it.
+- Alibre V28's DXF import converts ALL dimensions to notes/text, including its own exported dims
+  (verified by round-trip). Not a defect in our DXF. So: Alibre is a valid check for geometry,
+  scale, layers, linetypes, and dimension VALUES, but not for DIMENSION entity fidelity. Use a
+  second viewer that preserves dims (LibreCAD for DXF; DWG TrueView after DWG conversion).
 
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
 - [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF. Confirmed in Alibre (1:1 mm, dashed hidden, BC, layers).
 - [x] Step 3: centerlines + DIMENSION entities (OD, BC, 8X hole, thickness, overall length).
-      Alibre: values + Ø correct; dims came in as text (open item); centerlines solid → fixed (name).
+      Alibre: values + Ø correct; dims → notes is Alibre's importer (see above); centerlines fixed.
 - [ ] Next candidates: sheet + title block + scale; verification report; hub/RF dims; units decision.
