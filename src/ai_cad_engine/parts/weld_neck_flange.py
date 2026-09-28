@@ -18,6 +18,7 @@ from build123d import (
     Solid,
 )
 
+from ai_cad_engine.assembly import Component, Port
 from ai_cad_engine.measure import z_axis_cylinders, z_cones, z_planes
 from ai_cad_engine.standards.asme_b16_5 import WeldNeckFlange
 from ai_cad_engine.verify import CriticalDim
@@ -107,3 +108,25 @@ def measure(solid: Solid) -> dict[str, float]:
         "hub_dia_base": hd0,
         "hub_dia_weld": hd1,
     }
+
+
+def flange_component(tag: str, f: WeldNeckFlange) -> Component:
+    """WN flange with ports: `face` (RF contact face, out = -Z, x_dir = a centerline the bolt
+    holes straddle) and `weld` (hub end, out = +Z, butt weld sized A x B)."""
+    return Component(
+        tag=tag,
+        part_no=f"WN-{f.nps}-{f.pressure_class}-RF-S{f.bore_schedule}",
+        description=f"FLANGE, WN, RF, NPS {f.nps}, CL{f.pressure_class}, SCH {f.bore_schedule} BORE, ASME B16.5",
+        solid=build_weld_neck_flange(f),
+        ports={
+            "face": Port(
+                (0, 0, 0), (0, 0, -1), (1, 0, 0), end="RF",
+                attrs={"nps": f.nps, "class": f.pressure_class, "bolt_holes": f.bolt_hole_count},
+            ),
+            "weld": Port(
+                (0, 0, f.length_through_hub), (0, 0, 1), (1, 0, 0), end="BW",
+                attrs={"od": f.hub_dia_weld, "id": f.bore, "nps": f.nps},
+            ),
+        },
+        meta={"table": f},
+    )

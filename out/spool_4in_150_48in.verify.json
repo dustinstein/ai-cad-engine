@@ -1,0 +1,101 @@
+{
+  "part": "Spool, NPS 4 CL150 RF, 48\" F-F",
+  "standard": "ASME B16.5 / B36.10",
+  "drawing_file": null,
+  "model_tolerance_mm": 0.005,
+  "passed": true,
+  "not_on_drawing": [
+    "face_to_face",
+    "component_count",
+    "ports_valid",
+    "connections",
+    "no_interference",
+    "two_holed"
+  ],
+  "items": [
+    {
+      "key": "face_to_face",
+      "description": "Overall face-to-face length",
+      "kind": "length",
+      "nominal": 1219.1999999999998,
+      "model": 1219.1999999999998,
+      "model_pass": true,
+      "drawing": null,
+      "drawing_text": null,
+      "expected_text": null,
+      "drawing_pass": null,
+      "note": "",
+      "passed": true
+    },
+    {
+      "key": "component_count",
+      "description": "Components",
+      "kind": "count",
+      "nominal": 3,
+      "model": 3,
+      "model_pass": true,
+      "drawing": null,
+      "drawing_text": null,
+      "expected_text": null,
+      "drawing_pass": null,
+      "note": "",
+      "passed": true
+    },
+    {
+      "key": "ports_valid",
+      "description": "Every port sits on a matching planar face",
+      "kind": "check",
+      "nominal": 1,
+      "model": 1.0,
+      "model_pass": true,
+      "drawing": null,
+      "drawing_text": null,
+      "expected_text": null,
+      "drawing_pass": null,
+      "note": "",
+      "passed": true
+    },
+    {
+      "key": "connections",
+      "description": "Mated ports coincide, face each other, ends match",
+      "kind": "check",
+      "nominal": 1,
+      "model": 1.0,
+      "model_pass": true,
+      "drawing": null,
+      "drawing_text": null,
+      "expected_text": null,
+      "drawing_pass": null,
+      "note": "",
+      "passed": true
+    },
+    {
+      "key": "no_interference",
+      "description": "No overlapping material between components",
+      "kind": "check",
+      "nominal": 1,
+      "model": 1.0,
+      "model_pass": true,
+      "drawing": null,
+      "drawing_text": null,
+      "expected_text": null,
+      "drawing_pass": null,
+      "note": "",
+      "passed": true
+    },
+    {
+      "key": "two_holed",
+      "description": "Bolt holes of every flange straddle the vertical centerline",
+      "kind": "check",
+      "nominal": 1,
+      "model": 1.0,
+      "model_pass": true,
+      "drawing": null,
+      "drawing_text": null,
+      "expected_text": null,
+      "drawing_pass": null,
+      "note": "",
+      "passed": true
+    }
+  ]
+}

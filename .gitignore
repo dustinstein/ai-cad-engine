@@ -8,3 +8,4 @@ out/*
 !out/*.step
 !out/*.dxf
 !out/*.verify.json
+!out/*.bom.csv

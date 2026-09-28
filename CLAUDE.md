@@ -50,7 +50,12 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - `src/ai_cad_engine/parts/` — per family: builder from a table entry, `critical_dims(entry)`,
   `measure(solid)` (by role).
 - `src/ai_cad_engine/measure.py` — generic solid measurement helpers (Z-axis cylinders, planes, cones).
-- `src/ai_cad_engine/verify.py` — CriticalDim, verification report (model + drawing), DIMENSION tagging.
+- `src/ai_cad_engine/verify.py` — CriticalDim (length/count/angle/check), verification report (model +
+  drawing), DIMENSION tagging.
+- `src/ai_cad_engine/assembly.py` — Port / Component / Assembly: connect ports, port-vs-geometry
+  validation, connection + interference checks, bolt-hole angles, named STEP assembly, BOM.
+- `src/ai_cad_engine/assemblies/` — assembly builders (`spool.py`: flange + pipe + flange).
+- `src/ai_cad_engine/standards/asme_b36_10.py` — pipe OD/wall by NPS + schedule.
 - `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
 - `src/ai_cad_engine/drawing/dxf_writer.py` — doc setup (units, linetypes), third-angle layout, view writer.
 - `src/ai_cad_engine/drawing/sheet.py` — ANSI sizes, scale/sheet choice, border, title block, notes.
@@ -62,7 +67,8 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   allowance)` pipeline: inch conversion, third-angle layout, sheet choice, DXF.
 - `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf,verify.json}`; prints the report table and
   exits 1 on verification failure. `out/*.step|dxf|verify.json` committed for Alibre checks.
-- Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`.
+- `scripts/build_spool.py` → `out/spool_4in_150_48in.{step,bom.csv,verify.json}`.
+- Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`, `.../build_spool.py`.
 
 ## Decisions / conventions
 - Internal units: mm. STEP exported in mm (AP214 schema by default from OCP).
@@ -131,6 +137,26 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   Negative tests: wrong BC, wrong hole count, +0.01 mm error below display precision, tampered
   display text, hub/RF errors.
 
+- **Assemblies (target: custom oilfield items like the 12x8 pig launcher GA the user shared — barrels
+  of Sch 80 pipe, B16.9 eccentric reducer, Cl600 RF WN flanges, nozzles/branches, lateral pull port,
+  equalizer line with ball valve, hinged closure).** Nearly everything is standard components joined at
+  ports, so: component library (table-driven builders with named Ports) + assembly by connecting ports.
+  For assemblies the LLM should emit a component/connection graph (JSON), NOT build123d code; the
+  engine builds geometry. Free-form codegen only for truly custom parts (brackets, lugs). Vendor items
+  (valves, closures) = imported vendor STEP with hand-defined ports. Outputs: named assembly STEP →
+  GA drawing with overall dims/callouts/BOM → per-spool fabrication drawings.
+- Port = frame at the connecting face center, `direction` OUT of the part, `x_dir` reference in the face
+  (flanges: a centerline the bolt holes straddle), `end` type (BW, RF) + attrs (od/id, nps, class).
+  Connecting mates frames face to face; clocking rotates about the shared axis (explicit Rodrigues —
+  build123d `Plane.rotated` did NOT do this; a test caught it). Ports are declarations, so
+  `validate_ports` checks each against geometry (center of a planar face with matching normal).
+- Assembly checks (all measured on placed geometry): mated ports coincide + face each other + same end
+  type; BW ends match OD and ID (catches Sch 80 pipe on a Sch 40 flange bore); pairwise interference
+  (intersection volume); flanges two-holed (bolt holes straddle vertical, measured from hole
+  cylinders). Assembly frame: axis along +X, Z up.
+- STEP assemblies: build123d `Compound(children=[labeled solids])` → XCAF assembly with named products
+  (NEXT_ASSEMBLY_USAGE_OCCURRENCE), names survive re-import.
+
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
 - [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF. Confirmed in Alibre (1:1 mm, dashed hidden, BC, layers).
@@ -140,6 +166,9 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
       readability + containment tests. Confirmed in Alibre (inch, values, title block, dashed lines).
 - [x] Step 5: verification report (12 critical dims; 6 checked on the drawing), JSON + table, exit code.
 - [x] Step 6: half-section profile + face view; all 11 length/count critical dims on the drawing
-      (only bolt-hole orientation remains model-only). Awaiting Alibre check.
-- [ ] Next candidates: B16.5 table for more sizes/classes + eval set; DWG export via ODA; second part
-      family; angular dim for hole orientation.
+      (only bolt-hole orientation remains model-only). Confirmed in Alibre.
+- [x] Step 7: assembly core (ports, connect, checks, named STEP assembly, BOM) proved on a 4" Cl150
+      48" F-F spool. Awaiting Alibre check (opens as assembly with F1/P1/F2?).
+- [ ] Toward the pig launcher: B16.5 Cl600 + B36.10 Sch 80 tables (user-verified) → B16.9 fittings
+      (ecc reducer, tee/lateral) → branch connections (nozzle on barrel) → GA drawing + BOM table →
+      JSON assembly spec → LLM spec extraction.

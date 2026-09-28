@@ -19,6 +19,7 @@
       "drawing_text": "%%c9.000",
       "expected_text": "9.000",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -32,6 +33,7 @@
       "drawing_text": "%%c7.500 B.C.",
       "expected_text": "7.500",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -45,6 +47,7 @@
       "drawing_text": "8X %%c.750 THRU",
       "expected_text": ".750",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -58,6 +61,7 @@
       "drawing_text": "8X %%c.750 THRU",
       "expected_text": "8X",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -71,6 +75,7 @@
       "drawing_text": null,
       "expected_text": null,
       "drawing_pass": null,
+      "note": "",
       "passed": true
     },
     {
@@ -84,6 +89,7 @@
       "drawing_text": "%%c4.026",
       "expected_text": "4.026",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -97,6 +103,7 @@
       "drawing_text": "%%c6.190",
       "expected_text": "6.190",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -110,6 +117,7 @@
       "drawing_text": ".060",
       "expected_text": ".060",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -123,6 +131,7 @@
       "drawing_text": ".940",
       "expected_text": ".940",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -136,6 +145,7 @@
       "drawing_text": "3.000",
       "expected_text": "3.000",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -149,6 +159,7 @@
       "drawing_text": "%%c5.310",
       "expected_text": "5.310",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     },
     {
@@ -162,6 +173,7 @@
       "drawing_text": "%%c4.500",
       "expected_text": "4.500",
       "drawing_pass": true,
+      "note": "",
       "passed": true
     }
   ]

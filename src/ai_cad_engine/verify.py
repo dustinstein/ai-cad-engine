@@ -27,8 +27,8 @@ MM_PER_IN = 25.4
 class CriticalDim:
     key: str
     description: str
-    nominal: float  # mm for "length", count for "count", degrees for "angle"
-    kind: str = "length"  # length | count | angle
+    nominal: float  # mm for "length", count for "count", degrees for "angle", 1 for "check"
+    kind: str = "length"  # length | count | angle | check
 
 
 @dataclass
@@ -43,6 +43,7 @@ class Item:
     drawing_text: str | None = None
     expected_text: str | None = None
     drawing_pass: bool | None = None  # None = not dimensioned on the drawing
+    note: str = ""  # why a check failed
 
     @property
     def passed(self) -> bool:
@@ -77,15 +78,20 @@ class Report:
             f"{'KEY':<22}{'NOMINAL':>11}{'MODEL':>11}  {'M':<4}{'DRAWING':>11}  {'TEXT':<18}{'D':<4}"
         ]
         for i in self.items:
-            unit = {"length": "", "count": "", "angle": "°"}[i.kind]
-            fmt = (lambda v: "-" if v is None else f"{v:.3f}{unit}") if i.kind != "count" else (
-                lambda v: "-" if v is None else f"{v:g}"
-            )
+            unit = {"length": "", "count": "", "angle": "°", "check": ""}[i.kind]
+            if i.kind == "check":
+                fmt = lambda v: "-" if v is None else ("yes" if v else "NO")  # noqa: E731
+            elif i.kind == "count":
+                fmt = lambda v: "-" if v is None else f"{v:g}"  # noqa: E731
+            else:
+                fmt = lambda v: "-" if v is None else f"{v:.3f}{unit}"  # noqa: E731
             d = "-" if i.drawing_pass is None else ("ok" if i.drawing_pass else "FAIL")
             rows.append(
                 f"{i.key:<22}{fmt(i.nominal):>11}{fmt(i.model):>11}  {'ok' if i.model_pass else 'FAIL':<4}"
                 f"{fmt(i.drawing):>11}  {(i.drawing_text or '-').replace('%%c', 'Ø'):<18}{d:<4}"
             )
+            if i.note and not i.passed:
+                rows.append(f"    -> {i.note}")
         rows.append(f"RESULT: {'PASS' if self.passed else 'FAIL'}  (lengths in mm, model tol {MODEL_TOL_MM} mm)")
         return "\n".join(rows)
 
@@ -146,6 +152,7 @@ def build_report(
     crit: list[CriticalDim],
     model: dict[str, float],
     drawing_path: Path | None = None,
+    notes: dict[str, str] | None = None,
 ) -> Report:
     rep = Report(part, standard, str(drawing_path) if drawing_path else None)
     drawn = read_drawing_dims(drawing_path) if drawing_path else {}
@@ -155,9 +162,9 @@ def build_report(
         raise ValueError(f"drawing has tagged dims with no critical dim: {sorted(unknown)}")
     for c in crit:
         m = model.get(c.key)
-        tol = {"length": MODEL_TOL_MM, "count": 0, "angle": ANGLE_TOL_DEG}[c.kind]
+        tol = {"length": MODEL_TOL_MM, "count": 0, "angle": ANGLE_TOL_DEG, "check": 0}[c.kind]
         m_ok = m is not None and abs(m - c.nominal) <= tol
-        item = Item(c.key, c.description, c.kind, c.nominal, m, m_ok)
+        item = Item(c.key, c.description, c.kind, c.nominal, m, m_ok, note=(notes or {}).get(c.key, ""))
         if c.key in drawn:
             if c.kind != "length":
                 raise ValueError(f"only length dims are measured on drawings, got {c.key}")
