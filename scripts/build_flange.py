@@ -1,5 +1,7 @@
-"""Build the NPS 4 Class 150 weld-neck flange; export STEP and a dimensioned ANSI drawing (DXF)."""
+"""Build the NPS 4 Class 150 weld-neck flange; export STEP, a dimensioned ANSI drawing (DXF),
+and a verification report. Exits non-zero if verification fails."""
 
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -7,29 +9,40 @@ from build123d import Unit, export_step
 
 from ai_cad_engine.drawing.annotate import annotate_flange
 from ai_cad_engine.drawing.make import make_drawing
-from ai_cad_engine.drawing.sheet import TitleBlock
-from ai_cad_engine.parts.weld_neck_flange import build_weld_neck_flange
+from ai_cad_engine.parts.weld_neck_flange import build_weld_neck_flange, critical_dims, measure
 from ai_cad_engine.standards.asme_b16_5 import WN_4_150, flange_title_block
+from ai_cad_engine.verify import build_report
 
 OUT = Path(__file__).resolve().parents[1] / "out"
+NAME = "flange_4in_150"
 
 
-def main() -> None:
+def main() -> int:
     OUT.mkdir(exist_ok=True)
-    flange = build_weld_neck_flange(WN_4_150)
+    f = WN_4_150
+    flange = build_weld_neck_flange(f)
 
-    step = OUT / "flange_4in_150.step"
+    step = OUT / f"{NAME}.step"
     export_step(flange, step, unit=Unit.MM)
-    bb = flange.bounding_box()
     print(f"wrote {step}")
-    print(f"  bbox mm: {bb.size.X:.3f} x {bb.size.Y:.3f} x {bb.size.Z:.3f}")
-    print(f"  volume mm^3: {flange.volume:.1f}")
 
-    dxf = OUT / "flange_4in_150.dxf"
-    tb: TitleBlock = flange_title_block(WN_4_150, date=date.today().isoformat())
-    res = make_drawing(flange, annotate_flange, tb, dxf)
+    dxf = OUT / f"{NAME}.dxf"
+    res = make_drawing(flange, annotate_flange, flange_title_block(f, date=date.today().isoformat()), dxf)
     print(f"wrote {dxf}  (ANSI {res.sheet.size}, {res.sheet.scale_text})")
+
+    report = build_report(
+        part=f"Weld neck flange NPS {f.nps} Class {f.pressure_class} RF",
+        standard="ASME B16.5",
+        crit=critical_dims(f),
+        model=measure(flange),
+        drawing_path=dxf,
+    )
+    rpt = OUT / f"{NAME}.verify.json"
+    rpt.write_text(report.to_json() + "\n")
+    print(f"wrote {rpt}\n")
+    print(report.table())
+    return 0 if report.passed else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

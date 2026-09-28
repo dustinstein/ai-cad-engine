@@ -15,6 +15,7 @@ import ezdxf.document
 
 from ai_cad_engine.drawing.dxf_writer import PlacedView
 from ai_cad_engine.drawing.views import TOL, Circle, Line, View
+from ai_cad_engine.verify import tag_dimension
 
 DIMSTYLE = "ENGINE_IN"
 
@@ -151,28 +152,31 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale
             )
         )
 
-    def dia(center, r, angle_deg, text, out):
+    def dia(key, center, r, angle_deg, text, out, count_key=None):
         a = radians(angle_deg)
         loc = (center[0] + (r + out) * cos(a), center[1] + (r + out) * sin(a))
         d = msp.add_diameter_dim(
             center=center, radius=r, location=loc, text=text, dimstyle=DIMSTYLE, dxfattribs=dim_attrs
         )
         d.render()
+        tag_dimension(d.dimension, key, count_key)
         return d.dimension
 
-    ents.append(dia(c, bp.od_radius, 135, "<>", OD_LEADER_OUT * S))
-    ents.append(dia(c, bp.bc_radius, 45, "<> B.C.", bp.od_radius - bp.bc_radius + BC_LEADER_OUT * S))
+    ents.append(dia("od", c, bp.od_radius, 135, "<>", OD_LEADER_OUT * S))
+    ents.append(dia("bolt_circle", c, bp.bc_radius, 45, "<> B.C.", bp.od_radius - bp.bc_radius + BC_LEADER_OUT * S))
     # Hole callout on the hole nearest 67.5 deg (upper right), leader pointing outward.
     h = max(bp.hole_centers, key=lambda p: p[1] + 0.4 * p[0])
     hs = _off(h, top.offset)
     ang = _deg(hs[0] - c[0], hs[1] - c[1])
     ents.append(
         dia(
+            "bolt_hole_dia",
             hs,
             bp.hole_radius,
             ang,
             f"{len(bp.hole_centers)}X <> THRU",
             bp.od_radius - bp.bc_radius + HOLE_LEADER_OUT * S,
+            count_key="bolt_hole_count",
         )
     )
     doc.groups.new("ANNOT_TOP").set_data(ents)
@@ -192,7 +196,7 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale
         if name == "FRONT":
             x0 = pv.view.bbox[0] + pv.offset[0]
 
-            def vdim(p1, p2, dx):
+            def vdim(key, p1, p2, dx):
                 d = msp.add_linear_dim(
                     base=(x0 - dx, p1[1]),
                     p1=p1,
@@ -202,11 +206,12 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale
                     dxfattribs=dim_attrs,
                 )
                 d.render()
+                tag_dimension(d.dimension, key)
                 return d.dimension
 
             b = _off(prof.bottom_pt, pv.offset)
-            ents.append(vdim(b, _off(prof.back_face_pt, pv.offset), LIN_DIM_OFFSETS[0] * S))
-            ents.append(vdim(b, _off(prof.top_pt, pv.offset), LIN_DIM_OFFSETS[1] * S))
+            ents.append(vdim("thickness", b, _off(prof.back_face_pt, pv.offset), LIN_DIM_OFFSETS[0] * S))
+            ents.append(vdim("length_through_hub", b, _off(prof.top_pt, pv.offset), LIN_DIM_OFFSETS[1] * S))
         doc.groups.new(f"ANNOT_{name}").set_data(ents)
 
 

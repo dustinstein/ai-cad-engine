@@ -47,21 +47,24 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 ## Repo layout / tooling
 - uv, Python 3.12 (`.python-version`), src layout, pytest. build123d 0.13.
 - `src/ai_cad_engine/standards/asme_b16_5.py` — B16.5 tables (inch values ×25.4, stored in mm).
-- `src/ai_cad_engine/parts/` — deterministic part builders from table entries.
-- `src/ai_cad_engine/measure.py` — solid measurement helpers (seed of the verification loop).
+- `src/ai_cad_engine/parts/` — per family: builder from a table entry, `critical_dims(entry)`,
+  `measure(solid)` (by role).
+- `src/ai_cad_engine/measure.py` — generic solid measurement helpers (Z-axis cylinders, planes, cones).
+- `src/ai_cad_engine/verify.py` — CriticalDim, verification report (model + drawing), DIMENSION tagging.
 - `src/ai_cad_engine/drawing/views.py` — HLR orthographic projection → clean 2D prims (Line/Circle/Arc).
 - `src/ai_cad_engine/drawing/dxf_writer.py` — doc setup (units, linetypes), third-angle layout, view writer.
 - `src/ai_cad_engine/drawing/sheet.py` — ANSI sizes, scale/sheet choice, border, title block, notes.
 - `src/ai_cad_engine/drawing/annotate.py` — role-based feature finding, centerlines, DIMENSION entities.
 - `src/ai_cad_engine/drawing/make.py` — `make_drawing(part, annotator, title_block, path)` pipeline.
-- `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf}`. `out/*.step|dxf` committed for Alibre checks.
+- `scripts/build_flange.py` → `out/flange_4in_150.{step,dxf,verify.json}`; prints the report table and
+  exits 1 on verification failure. `out/*.step|dxf|verify.json` committed for Alibre checks.
 - Commands: `uv sync`, `uv run pytest`, `uv run python scripts/build_flange.py`.
 
 ## Decisions / conventions
 - Internal units: mm. STEP exported in mm (AP214 schema by default from OCP).
 - Flange coords: axis = Z, RF contact face at Z=0, weld end at +Z. Bolt holes straddle centerlines.
 - B16.5 Class 150/300: 0.06" RF treated as INCLUDED in C (thickness) and Y (length through hub),
-  per the commonly published tables. **Open item:** confirm against the user's B16.5 edition.
+  per the commonly published tables. **Confirmed by user** against their B16.5 edition.
 - Weld-neck v0 simplifications: straight hub taper, no r1 fillet, no weld bevel, no RF serration.
 - Drawing: third-angle projection (ASME Y14.3). Z-up model; FRONT = viewer at -Y, TOP = +Z, RIGHT = +X.
   View 2D coords = model coords projected (camera looks at model origin) → view↔model is a pure axis
@@ -94,12 +97,22 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   a real overlap (.940 text crossing the 3.000 dim line). Dimension placement is still hand-tuned per
   part family; general placement/collision avoidance is future work.
 - Title block: TITLE / DWG NO / REV / SIZE / SHEET / SCALE / UNITS / PROJECTION / DRAWN / DATE /
-  MATERIAL. Material left blank (not invented). Notes cite ASME B16.5 for dims+tolerances and flag the
+  MATERIAL. Material left blank on purpose (user: a material query will be built into the tool later). Notes cite ASME B16.5 for dims+tolerances and flag the
   drawing as machine-generated. Values shrink to fit their cell (tested).
 - Alibre V28's DXF **and DWG** import converts ALL dimensions to notes/text, including its own
   exported dims (verified by round-trip of both formats). DWG does not help for Alibre. Not a defect in our DXF. So: Alibre is a valid check for geometry,
   scale, layers, linetypes, and dimension VALUES, but not for DIMENSION entity fidelity. Use a
   second viewer that preserves dims (LibreCAD for DXF; DWG TrueView after DWG conversion).
+
+- Verification report (`verify.py`): each family lists critical dims with nominals from the table.
+  MODEL = measured on the solid by role. DRAWING = tagged DIMENSION read back from the DXF on disk
+  (XDATA appid `AI_CAD_ENGINE`: [key, optional count_key]); passes only if the measurement matches
+  AND the displayed text equals the nominal formatted at the dimstyle precision. "NX" callout prefixes
+  verify counts. Tolerance is a MODELLING tolerance (0.005 mm, 0.01°), not a manufacturing tolerance —
+  B16.5 manufacturing tolerances must come from a table filled from the user's copy, never from memory.
+  Report lists dims not shown on the drawing (`not_on_drawing`) rather than hiding them.
+  Negative tests: wrong BC, wrong hole count, +0.01 mm error below display precision, tampered
+  display text, hub/RF errors.
 
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
@@ -107,6 +120,7 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - [x] Step 3: centerlines + DIMENSION entities (OD, BC, 8X hole, thickness, overall length).
       Alibre: values + Ø correct; dims → notes is Alibre's importer (see above); centerlines fixed.
 - [x] Step 4: inch units + ANSI B sheet, auto scale (1:2 for the flange), border, title block, notes,
-      readability + containment tests. Awaiting Alibre check.
-- [ ] Next candidates: verification report (per-dim pass/fail, JSON + on-drawing); hub/RF/bore dims;
-      DWG export via ODA; second part family (e.g. blind flange, lifting lug).
+      readability + containment tests. Confirmed in Alibre (inch, values, title block, dashed lines).
+- [x] Step 5: verification report (12 critical dims; 6 checked on the drawing), JSON + table, exit code.
+- [ ] Next candidates: dimension bore/RF/hub on the drawing (half-section view is the natural place);
+      B16.5 table for more sizes/classes + eval set; DWG export via ODA; second part family.
