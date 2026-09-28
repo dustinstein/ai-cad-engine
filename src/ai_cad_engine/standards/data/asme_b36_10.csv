@@ -1,0 +1,9 @@
+nps,schedule,od,wall,verified,source
+4,40,4.500,0.237,yes,consistent with user-confirmed B16.5 NPS 4 A=4.50 and Sch 40 bore 4.026
+2,80,2.375,0.218,no,DRAFT from memory - verify
+2,160,2.375,0.344,no,DRAFT from memory - verify
+3,80,3.500,0.300,no,DRAFT from memory - verify
+3,160,3.500,0.438,no,DRAFT from memory - verify
+6,80,6.625,0.432,no,DRAFT from memory - verify
+8,80,8.625,0.500,no,DRAFT from memory - verify
+12,80,12.750,0.688,no,DRAFT from memory - verify (GA shows 11.376 ID = 0.687 wall)

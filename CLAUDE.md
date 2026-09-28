@@ -46,7 +46,11 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 
 ## Repo layout / tooling
 - uv, Python 3.12 (`.python-version`), src layout, pytest. build123d 0.13.
-- `src/ai_cad_engine/standards/asme_b16_5.py` — B16.5 tables (inch values ×25.4, stored in mm).
+- `src/ai_cad_engine/standards/data/*.csv` — standards tables as published (inch), with `verified` +
+  `source` columns. `tables.py` loads them and REFUSES rows not verified=yes (UnverifiedDataError)
+  unless allow_unverified=True (tests/previews only). Every row passes geometric sanity checks.
+- `src/ai_cad_engine/standards/asme_b16_5.py` — `wn_flange(nps, class, schedule)`: B16.5 row + B36.10
+  pipe → WeldNeckFlange (mm). `asme_b36_10.py` — `pipe(nps, schedule)`.
 - `src/ai_cad_engine/parts/` — per family: builder from a table entry, `critical_dims(entry)`,
   `measure(solid)` (by role).
 - `src/ai_cad_engine/measure.py` — generic solid measurement helpers (Z-axis cylinders, planes, cones).
@@ -73,8 +77,13 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 ## Decisions / conventions
 - Internal units: mm. STEP exported in mm (AP214 schema by default from OCP).
 - Flange coords: axis = Z, RF contact face at Z=0, weld end at +Z. Bolt holes straddle centerlines.
-- B16.5 Class 150/300: 0.06" RF treated as INCLUDED in C (thickness) and Y (length through hub),
-  per the commonly published tables. **Confirmed by user** against their B16.5 edition.
+- B16.5 RF convention is per row (`rf_in_C_Y`): Class 150/300 0.06" RF INCLUDED in C and Y
+  (**confirmed by user**); Class 400+ 0.25" RF NOT included — C and Y are from the flange front face and
+  the RF is added in front. `face_to_back` / `overall_length` properties give RF-face-based lengths;
+  measure() and the drawing use the matching datum (drawing C/Y dims start at the front face for 600).
+- WN bore is not a B16.5 value: it comes from the pipe schedule. Hub-at-weld A in the table is the pipe
+  OD rounded to 2 decimals (6.63 vs 6.625); the solid uses the pipe OD and the loader checks agreement
+  within 0.005".
 - Weld-neck v0 simplifications: straight hub taper, no r1 fillet, no weld bevel, no RF serration.
 - Drawing: third-angle projection (ASME Y14.3). Views are FRONT / optional TOP / optional RIGHT; each
   family picks its ViewSpecs. View 2D coords = model coords projected (camera looks at model origin;
@@ -114,6 +123,12 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   off-axis circles, view extents, full-width face), never to table values, and text uses `<>` so the
   DXF shows the measured value. Tests compare DIMENSION measurements to the standard, and a negative
   test proves a 0.5 mm error shows up on the drawing.
+- Linear-dim text is always placed explicitly by `Annotator.linear` (ezdxf's own placement shifted some
+  vertical-dim texts 0.5" off the line): centered on the dim line when it fits between the extension
+  lines, else outside before p1. Text-width estimate `CHAR_W_EST` = 1.05 × height, shared with tests
+  (0.9 missed a real touch on the NPS 2 CL600 drawing).
+- `tests/test_flange_family.py` runs build + verification (model and drawing) + readability +
+  containment + hand-computed section area for EVERY B16.5 row, drafts included.
 - Known cosmetic limit: at 1:2 the .060 RF-height extension line sits 0.03" from the flange front face.
 - Readability test: dimension text boxes (estimated from char height × count, ezdxf's MTEXT bbox is
   unreliable) must not touch other dims' lines, other dim text, or part geometry. Verified it catches
@@ -169,6 +184,8 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
       (only bolt-hole orientation remains model-only). Confirmed in Alibre.
 - [x] Step 7: assembly core (ports, connect, checks, named STEP assembly, BOM) proved on a 4" Cl150
       48" F-F spool. Awaiting Alibre check (opens as assembly with F1/P1/F2?).
-- [ ] Toward the pig launcher: B16.5 Cl600 + B36.10 Sch 80 tables (user-verified) → B16.9 fittings
+- [x] Step 8: CSV standards tables with verified gate + sanity checks; RF convention per row; Cl600
+      NPS 2/3/6/8/12 and Sch 80/160 pipe rows entered as DRAFTS. Awaiting user verification of values.
+- [ ] Toward the pig launcher: user verifies Cl600 + pipe drafts → B16.9 fittings
       (ecc reducer, tee/lateral) → branch connections (nozzle on barrel) → GA drawing + BOM table →
       JSON assembly spec → LLM spec extraction.

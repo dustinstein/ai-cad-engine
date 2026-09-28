@@ -24,11 +24,11 @@ PROFILE = ViewSpec("FRONT", (0, -1, 0), (-1, 0, 0))
 FACE = ViewSpec("RIGHT", (0, 0, 1), (-1, 0, 0))
 
 # Paper inches reserved around the view block: (left, bottom, right, top).
-ALLOWANCE = (1.8, 1.7, 1.7, 0.9)
-VIEW_GAP = 2.2  # between profile and face view; hub diameter dims live here
+ALLOWANCE = (2.1, 2.0, 1.7, 0.9)
+VIEW_GAP = 2.5  # between profile and face view; hub diameter dims live here
 
 # Dimension line offsets from the view, paper inches.
-NEAR, FAR = 0.5, 1.3  # FAR clears NEAR's horizontal text (~.7 in wide)
+NEAR, FAR = 0.6, 1.6  # text (~.8 in wide) centered on the axis must clear the centerline end and each other
 OD_LEADER_OUT, BC_LEADER_OUT, HOLE_LEADER_OUT = 0.5, 0.75, 0.4
 
 
@@ -106,7 +106,11 @@ def find_section_profile(view: View) -> SectionProfile:
     return SectionProfile(ax, x0, x1, a_front, a_back, y1 - ax, r_rf, r_bore, r_hub_base, r_hub_weld, hole_y)
 
 
-def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale: float) -> None:
+def annotate_flange(
+    doc: ezdxf.document.Drawing, placed: list[PlacedView], scale: float, rf_in_cy: bool = True
+) -> None:
+    """`rf_in_cy`: B16.5 convention — C and Y dimensioned from the RF contact face (Class
+    150/300) or from the flange front face (Class 400+)."""
     S = scale
     an = Annotator(doc, S)
     pv = {p.view.spec.name: p for p in placed}
@@ -129,11 +133,10 @@ def annotate_flange(doc: ezdxf.document.Drawing, placed: list[PlacedView], scale
     top = sp.axis_y + sp.r_od + oy
     left = sp.a_min + ox
     right = sp.a_max + ox
-    # Axial lengths below the (exterior) lower half.
-    an.linear("FRONT", "thickness", P(sp.a_min, -sp.r_rf), P(sp.a_back, -sp.r_od), (left, bottom - NEAR * S), 0)
-    an.linear(
-        "FRONT", "length_through_hub", P(sp.a_min, -sp.r_rf), P(sp.a_max, -sp.r_hub_weld), (left, bottom - FAR * S), 0
-    )
+    # Axial lengths below the (exterior) lower half, from the C/Y datum.
+    datum = P(sp.a_min, -sp.r_rf) if rf_in_cy else P(sp.a_front, -sp.r_od)
+    an.linear("FRONT", "thickness", datum, P(sp.a_back, -sp.r_od), (left, bottom - NEAR * S), 0)
+    an.linear("FRONT", "length_through_hub", datum, P(sp.a_max, -sp.r_hub_weld), (left, bottom - FAR * S), 0)
     # Raised face height above the section half; too small for inside text, so text sits left.
     an.linear(
         "FRONT",

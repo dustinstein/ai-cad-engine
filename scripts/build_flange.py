@@ -2,6 +2,7 @@
 and a verification report. Exits non-zero if verification fails."""
 
 import sys
+from functools import partial
 from datetime import date
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def main() -> int:
     dxf = OUT / f"{NAME}.dxf"
     res = make_drawing(
         fd.flange_views(flange),
-        fd.annotate_flange,
+        partial(fd.annotate_flange, rf_in_cy=f.rf_in_cy),
         flange_title_block(f, date=date.today().isoformat()),
         dxf,
         view_gap=fd.VIEW_GAP,
@@ -41,7 +42,7 @@ def main() -> int:
         part=f"Weld neck flange NPS {f.nps} Class {f.pressure_class} RF",
         standard="ASME B16.5",
         crit=critical_dims(f),
-        model=measure(flange),
+        model=measure(flange, f.rf_in_cy),
         drawing_path=dxf,
     )
     rpt = OUT / f"{NAME}.verify.json"

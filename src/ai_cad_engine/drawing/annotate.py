@@ -18,6 +18,9 @@ from ai_cad_engine.verify import tag_dimension
 
 DIMSTYLE = "ENGINE_IN"
 CL_OVERSHOOT = 0.125  # paper inches: centerline extension past the feature
+TEXT_H = 0.125  # paper inches (dimtxt)
+CHAR_W_EST = 1.05  # conservative glyph advance / text height (rendered fonts run ~1.0)
+TEXT_CLEAR = 0.1  # paper inches between text and extension line when text goes outside
 HALF_DIM = {"dimsd2": 1, "dimse2": 1, "dimsah": 1, "dimblk1": "", "dimblk2": "NONE"}
 
 
@@ -83,6 +86,8 @@ class Annotator:
         location: Pt | None = None,
         override: dict | None = None,
     ):
+        if location is None:
+            location = self._outside_text_location(p1, p2, base, angle, text, override)
         d = self.msp.add_linear_dim(
             base=base,
             p1=p1,
@@ -97,6 +102,25 @@ class Annotator:
         d.render()
         tag_dimension(d.dimension, key)
         return self._keep(view, d.dimension)
+
+    def _outside_text_location(self, p1: Pt, p2: Pt, base: Pt, angle: float, text: str, override) -> Pt | None:
+        """Explicit text position (ezdxf's own placement shifts some vertical-dim texts off
+        the dimension line): centered on the dimension line when it fits between the
+        extension lines, otherwise outside, before p1 (the lower/left one)."""
+        if override:  # half dims etc. place their own text
+            return None
+        horizontal = abs(angle) < 1e-9
+        i = 0 if horizontal else 1
+        span = abs(p2[i] - p1[i])
+        shown = text.replace("<>", fmt_inch(span)).replace("%%c", "X")
+        w = len(shown) * TEXT_H * CHAR_W_EST * self.S
+        extent = w if horizontal else TEXT_H * self.S  # along the dimension line
+        lo = min(p1[i], p2[i])
+        if extent + 2 * TEXT_CLEAR * self.S <= span:
+            c = lo + span / 2
+        else:
+            c = lo - TEXT_CLEAR * self.S - extent / 2
+        return (c, base[1]) if horizontal else (base[0], c)
 
     def diameter(
         self,
@@ -156,3 +180,9 @@ def find_bolt_pattern(view: View) -> BoltPattern:
         hole_centers=[c.center for c in holes],
         bc_radius=sum(dists) / len(dists),
     )
+
+
+def fmt_inch(v: float, dec: int = 3) -> str:
+    """ASME inch format as the dimstyle renders it: fixed decimals, no leading zero."""
+    t = f"{v:.{dec}f}"
+    return t[1:] if t.startswith("0.") else t

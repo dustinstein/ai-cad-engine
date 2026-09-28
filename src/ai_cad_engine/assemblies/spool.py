@@ -28,7 +28,7 @@ class SpoolSpec:
 
     @property
     def pipe_length(self) -> float:
-        return self.face_to_face - 2 * self.flange.length_through_hub
+        return self.face_to_face - 2 * self.flange.overall_length
 
 
 def build_spool(spec: SpoolSpec, name: str = "SPOOL") -> Assembly:
