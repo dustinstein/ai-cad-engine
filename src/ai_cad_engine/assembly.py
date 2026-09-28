@@ -7,6 +7,10 @@ centerline the bolt holes straddle). Connecting port B to port A places B so
 the two frames coincide face to face (B's direction opposite A's), with an
 optional clocking rotation about the shared axis.
 
+Butt-weld connections carry a root gap: the mating faces are separated by
+`gap` along the shared axis (the weld fills it). Face-to-face lengths therefore
+include the gaps, and pipe cut lengths must subtract them.
+
 Ports are declarations by the component builder, so `validate_ports` checks
 each one against the geometry: the origin must be the center of a planar face
 whose outward normal is `direction`.
@@ -102,6 +106,7 @@ def _center_of_circles(face, o: Vector) -> bool:
 class Connection:
     a: str  # "TAG.port"
     b: str
+    gap: float = 0.0  # mm between the mating faces (butt-weld root gap)
 
 
 class Assembly:
@@ -114,18 +119,26 @@ class Assembly:
         """Place `comp` so its `port` frame lands on plane `at` (origin, x_dir, z_dir=out)."""
         return self._put(comp, at.location * comp.ports[port].plane.location.inverse())
 
-    def connect(self, comp: Component, port: str, to: str, clock_deg: float = 0.0) -> Placed:
-        """Place `comp` so its `port` mates face-to-face with placed port `to` ("TAG.port")."""
+    def connect(
+        self, comp: Component, port: str, to: str, clock_deg: float = 0.0, gap: float = 0.0
+    ) -> Placed:
+        """Place `comp` so its `port` mates face-to-face with placed port `to` ("TAG.port"),
+        `gap` mm apart along the shared axis (butt-weld root gap; must be 0 for other ends)."""
         tag, pname = to.split(".")
         target = self.placed[tag].port(pname)
+        if gap and (target.end != "BW" or comp.ports[port].end != "BW"):
+            raise ValueError(f"root gap only applies to butt-weld ends ({to} / {comp.tag}.{port})")
+        if gap < 0:
+            raise ValueError("negative gap")
         z = Vector(target.direction) * -1
         x = Vector(target.x_dir)
         if clock_deg:  # rotate x_dir about the shared axis (Rodrigues; x is perpendicular to z)
             a = radians(clock_deg)
             x = x * cos(a) + z.normalized().cross(x) * sin(a)
-        mate = Plane(origin=target.origin, x_dir=x, z_dir=z)
+        origin = Vector(target.origin) + Vector(target.direction).normalized() * gap
+        mate = Plane(origin=origin, x_dir=x, z_dir=z)
         placed = self._put(comp, mate.location * comp.ports[port].plane.location.inverse())
-        self.connections.append(Connection(to, f"{comp.tag}.{port}"))
+        self.connections.append(Connection(to, f"{comp.tag}.{port}", gap))
         return placed
 
     def _put(self, comp: Component, loc: Location) -> Placed:
@@ -141,12 +154,15 @@ class Assembly:
     # ---- checks ----
 
     def connection_errors(self) -> list[str]:
-        """Mated ports must coincide, face each other, and have compatible ends."""
+        """Mated ports are coaxial, face each other, sit exactly `gap` apart, and have
+        compatible ends."""
         errs = []
         for c in self.connections:
             pa, pb = self.port(c.a), self.port(c.b)
-            if (Vector(pa.origin) - Vector(pb.origin)).length > POS_TOL:
-                errs.append(f"{c.a} / {c.b}: origins apart")
+            expected = Vector(pa.origin) + Vector(pa.direction).normalized() * c.gap
+            off = (Vector(pb.origin) - expected).length
+            if off > POS_TOL:
+                errs.append(f"{c.a} / {c.b}: faces not {c.gap:.4f} mm apart on axis (off by {off:.4f} mm)")
             if Vector(pa.direction).dot(Vector(pb.direction)) > -1 + ANG_TOL:
                 errs.append(f"{c.a} / {c.b}: not face to face")
             if pa.end != pb.end:
@@ -189,6 +205,15 @@ class Assembly:
             r["qty"] += 1
             r["tags"].append(c.tag)
         return [dict(r, item=i, tags=" ".join(r["tags"])) for i, r in enumerate(rows.values(), 1)]
+
+    def gaps(self) -> list[tuple[str, str, float]]:
+        """Measured distance between mated butt-weld faces, from the placed ports."""
+        out = []
+        for c in self.connections:
+            pa, pb = self.port(c.a), self.port(c.b)
+            if pa.end == "BW":
+                out.append((c.a, c.b, (Vector(pb.origin) - Vector(pa.origin)).dot(Vector(pa.direction).normalized())))
+        return out
 
     def write_bom_csv(self, path: Path) -> None:
         with path.open("w", newline="") as fh:

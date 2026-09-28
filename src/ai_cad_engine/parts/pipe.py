@@ -23,7 +23,7 @@ def pipe_component(
     return Component(
         tag=tag,
         part_no=f"PIPE-{nps}-S{schedule}-{length / 25.4:.3f}",
-        description=f'PIPE, NPS {nps}, SCH {schedule}, BE, {length / 25.4:.3f}" LG',
+        description=f'PIPE, NPS {nps}, SCH {schedule}, BE, CUT LENGTH {length / 25.4:.3f}"',
         solid=build_pipe(od, wall, length),
         ports={
             "end1": Port((0, 0, 0), (0, 0, -1), end="BW", attrs=ends),

@@ -25,9 +25,9 @@ def main() -> int:
     asm.write_bom_csv(bom)
     print(f"wrote {step}\nwrote {bom}")
 
-    model, notes = measure(asm)
+    model, notes = measure(asm, spec.root_gap)
     report = build_report(
-        part='Spool, NPS 4 CL150 RF, 48" F-F',
+        part=f'Spool, NPS 4 CL150 RF, 48" F-F, {spec.root_gap / IN:.4f}" root gaps',
         standard="ASME B16.5 / B36.10",
         crit=critical_dims(spec),
         model=model,

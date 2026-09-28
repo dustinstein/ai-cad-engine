@@ -169,6 +169,11 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
   type; BW ends match OD and ID (catches Sch 80 pipe on a Sch 40 flange bore); pairwise interference
   (intersection volume); flanges two-holed (bolt holes straddle vertical, measured from hole
   cylinders). Assembly frame: axis along +X, Z up.
+- **Butt-weld root gap** (user catch: 2 × Y + 42.000" pipe = 48.000" only with zero gap). BW
+  connections carry a real gap between mating faces (`connect(..., gap=)`, rejected on non-BW ends);
+  connection check requires faces exactly `gap` apart on axis. Face-to-face is over the raised faces
+  INCLUDING gaps; pipe cut length = F-F − 2 × flange overall length − 2 × gap. Default 1/16"
+  (`DEFAULT_ROOT_GAP`), typical 1/16"–1/8", set per weld procedure. BOM shows CUT LENGTH.
 - STEP assemblies: build123d `Compound(children=[labeled solids])` → XCAF assembly with named products
   (NEXT_ASSEMBLY_USAGE_OCCURRENCE), names survive re-import.
 
@@ -183,9 +188,12 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - [x] Step 6: half-section profile + face view; all 11 length/count critical dims on the drawing
       (only bolt-hole orientation remains model-only). Confirmed in Alibre.
 - [x] Step 7: assembly core (ports, connect, checks, named STEP assembly, BOM) proved on a 4" Cl150
-      48" F-F spool. Awaiting Alibre check (opens as assembly with F1/P1/F2?).
+      48" F-F spool. Confirmed in Alibre (assembly F1/P1/F2, 1219.2 mm, two-holed).
 - [x] Step 8: CSV standards tables with verified gate + sanity checks; RF convention per row; Cl600
-      NPS 2/3/6/8/12 and Sch 80/160 pipe rows entered as DRAFTS. Awaiting user verification of values.
-- [ ] Toward the pig launcher: user verifies Cl600 + pipe drafts → B16.9 fittings
+      NPS 2/3/6/8/12 and Sch 80/160 pipe rows — user-verified 2026-09-28 (12" Sch 80 wall .688;
+      GA's 11.376 ID implies .687 — open question which the job uses).
+- [x] Step 9: butt-weld root gap in assemblies; spool pipe cut 41.875" for 48" F-F at 1/16" gaps.
+- [ ] Open: nozzle schedules (2"/3"/6": Sch 80? 160? XXS?).
+- [ ] Toward the pig launcher: B16.9 fittings
       (ecc reducer, tee/lateral) → branch connections (nozzle on barrel) → GA drawing + BOM table →
       JSON assembly spec → LLM spec extraction.

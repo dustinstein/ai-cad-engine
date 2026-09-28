@@ -1,7 +1,7 @@
 nps,class,O,C,R,rf_height,rf_in_C_Y,W,bolt_holes,hole_dia,X,A,Y,verified,source
 4,150,9.00,0.94,6.19,0.06,yes,7.50,8,0.75,5.31,4.50,3.00,yes,user-confirmed against their B16.5 copy 2026-09-28
-2,600,6.50,1.00,3.62,0.25,no,5.00,8,0.75,2.88,2.38,2.62,no,DRAFT from memory - verify every value
-3,600,8.25,1.25,5.00,0.25,no,6.62,8,0.88,4.25,3.50,3.12,no,DRAFT from memory - verify every value
-6,600,14.00,1.88,8.50,0.25,no,11.50,12,1.12,7.50,6.63,4.62,no,DRAFT from memory - verify every value
-8,600,16.50,2.19,10.62,0.25,no,13.75,12,1.25,9.75,8.63,5.25,no,DRAFT from memory - verify every value
-12,600,22.00,2.62,15.00,0.25,no,19.25,20,1.38,14.75,12.75,6.12,no,DRAFT from memory - verify every value
+2,600,6.50,1.00,3.62,0.25,no,5.00,8,0.75,2.88,2.38,2.62,yes,user-verified against their B16.5 copy 2026-09-28
+3,600,8.25,1.25,5.00,0.25,no,6.62,8,0.88,4.25,3.50,3.12,yes,user-verified against their B16.5 copy 2026-09-28
+6,600,14.00,1.88,8.50,0.25,no,11.50,12,1.12,7.50,6.63,4.62,yes,user-verified against their B16.5 copy 2026-09-28
+8,600,16.50,2.19,10.62,0.25,no,13.75,12,1.25,9.75,8.63,5.25,yes,user-verified against their B16.5 copy 2026-09-28
+12,600,22.00,2.62,15.00,0.25,no,19.25,20,1.38,14.75,12.75,6.12,yes,user-verified against their B16.5 copy 2026-09-28

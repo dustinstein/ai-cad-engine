@@ -30,12 +30,19 @@ def test_all_rows_sane():
         check_pipe_row(r)
 
 
-def test_unverified_rows_are_refused():
-    drafts = [r for r in all_rows() if r["verified"] != "yes"]
-    assert drafts, "no draft rows left; drop this test or keep one"
-    r = drafts[0]
+def test_unverified_rows_are_refused(monkeypatch):
+    from ai_cad_engine.standards import tables
+
+    draft = tuple(dict(r, verified="no", source="DRAFT") for r in all_rows())
+    real = tables.load
+    monkeypatch.setattr(tables, "load", lambda name: draft if name == "asme_b16_5_wn.csv" else real(name))
     with pytest.raises(UnverifiedDataError):
-        wn_flange(r["nps"], int(r["class"]), SCHEDULE[r["class"]])
+        wn_flange("8", 600, "80")
+    assert wn_flange("8", 600, "80", allow_unverified=True).nps == "8"
+
+
+def test_all_rows_verified():
+    assert all(r["verified"] == "yes" for r in all_rows() + pipe_rows())
 
 
 def test_sanity_catches_typo():
