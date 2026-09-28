@@ -82,9 +82,12 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - Text height 3.5 mm is at 1:1 model space; revisit when the sheet/scale step lands.
 - Linetypes: Alibre maps by NAME (custom "CENTER_MM" imported solid; "HIDDEN" worked). Only use
   standard names (HIDDEN, CENTER, ...) and override their patterns for mm. Test enforces this.
-- **Open item:** Alibre V28 imported our DIMENSION entities as text. The DXF audits clean (ezdxf),
-  entities have rendered *D blocks. Suspect Alibre's DXF importer explodes dims. Diagnosing with
-  `scripts/diag_dxf_dims.py` (R2000/R2010 flange + minimal 1-dim file) and an Alibre round-trip control.
+- **Open item:** Alibre V28 (double-click open) imports the flange drawing's DIMENSIONs as text.
+  Established: Alibre's own dim round-trips as a dim; OUR minimal file (1 horizontal linear dim,
+  layer 0, R2000) imports as a dim; full flange at R2000/R2010/R2018 → text. So it is something in
+  our flange file, not DXF version or ezdxf's DIMENSION encoding per se. Bisecting with
+  `scripts/diag_dxf_dims.py` → `out/diag/A..H` (one factor each: vertical, layer DIM, GROUP,
+  diameter default / text outside / custom text, flange without groups).
 
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).

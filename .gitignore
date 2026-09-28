@@ -7,3 +7,5 @@ dist/
 out/*
 !out/*.step
 !out/*.dxf
+!out/diag/
+!out/diag/*.dxf
