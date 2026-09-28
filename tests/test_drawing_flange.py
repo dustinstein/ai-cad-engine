@@ -104,6 +104,19 @@ def test_all_referenced_linetypes_defined(doc):
         assert layer.dxf.linetype in doc.linetypes, layer.dxf.name
 
 
+def test_only_standard_linetype_names(doc):
+    # Alibre maps linetypes by name; a custom name imports as solid.
+    standard = {"CONTINUOUS", "BYLAYER", "BYBLOCK", "HIDDEN", "CENTER"}
+    for layer in doc.layers:
+        assert layer.dxf.linetype.upper() in standard, (layer.dxf.name, layer.dxf.linetype)
+
+
+@pytest.mark.parametrize("name", ["HIDDEN", "CENTER"])
+def test_linetype_dashes_readable_in_mm(doc, name):
+    dashes = [t.value for t in doc.linetypes.get(name).pattern_tags.tags if t.code == 49]
+    assert max(dashes) >= 2.0
+
+
 def test_no_duplicate_entities(doc):
     seen = set()
     for e in view_entities(doc):

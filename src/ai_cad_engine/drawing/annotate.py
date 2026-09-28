@@ -23,8 +23,11 @@ CL_OVERSHOOT = 6.0  # centerline extension past the feature, mm
 
 
 def setup(doc: ezdxf.document.Drawing) -> None:
-    doc.linetypes.add("CENTER_MM", pattern=list(CENTER_PATTERN), description="Center ____ _ ____")
-    doc.layers.add("CENTER", color=1, linetype="CENTER_MM", lineweight=25)
+    # Must use the standard name: Alibre maps linetypes by NAME and ignores unknown ones
+    # (a custom "CENTER_MM" imported solid). Replace ezdxf's inch-sized CENTER in place.
+    doc.linetypes.remove("CENTER")
+    doc.linetypes.add("CENTER", pattern=list(CENTER_PATTERN), description="Center ____ _ ____")
+    doc.layers.add("CENTER", color=1, linetype="CENTER", lineweight=25)
     doc.layers.add("DIM", color=3, lineweight=25)
     # Own style: ezdxf's EZ_* styles are scaled for other units (e.g. EZ_RADIUS shows 20 mm as 2000).
     style = doc.dimstyles.new(DIMSTYLE)

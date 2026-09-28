@@ -41,8 +41,8 @@ def layout_third_angle(
     ]
 
 
-def new_doc() -> ezdxf.document.Drawing:
-    doc = ezdxf.new(DXF_VERSION, setup=True, units=INSUNITS_MM)
+def new_doc(version: str = DXF_VERSION) -> ezdxf.document.Drawing:
+    doc = ezdxf.new(version, setup=True, units=INSUNITS_MM)
     doc.header["$MEASUREMENT"] = 1  # metric
     doc.linetypes.add("HIDDEN", pattern=list(HIDDEN_PATTERN), description="Hidden __ __ __")
     doc.layers.add("VISIBLE", color=7, lineweight=50)
@@ -64,8 +64,9 @@ def write_dxf(
     placed: list[PlacedView],
     path: Path,
     annotate: Callable[[ezdxf.document.Drawing, list[PlacedView]], None] | None = None,
+    version: str = DXF_VERSION,
 ) -> None:
-    doc = new_doc()
+    doc = new_doc(version)
     add_views(doc, placed)
     if annotate is not None:
         annotate(doc, placed)

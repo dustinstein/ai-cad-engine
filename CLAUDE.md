@@ -80,9 +80,15 @@ Text prompt or structured spec → (1) dimensionally accurate 3D solid exported 
 - **Open item:** dimension units — mm only for now. ezdxf does not render DIMALT (dual units) into the
   dimension block. Oilfield drawings are often inch; user to choose mm / inch / dual.
 - Text height 3.5 mm is at 1:1 model space; revisit when the sheet/scale step lands.
+- Linetypes: Alibre maps by NAME (custom "CENTER_MM" imported solid; "HIDDEN" worked). Only use
+  standard names (HIDDEN, CENTER, ...) and override their patterns for mm. Test enforces this.
+- **Open item:** Alibre V28 imported our DIMENSION entities as text. The DXF audits clean (ezdxf),
+  entities have rendered *D blocks. Suspect Alibre's DXF importer explodes dims. Diagnosing with
+  `scripts/diag_dxf_dims.py` (R2000/R2010 flange + minimal 1-dim file) and an Alibre round-trip control.
 
 ## Status
 - [x] Step 1: scaffold + 4" Cl150 WN flange → STEP + pytest. Confirmed in Alibre V28 (mm, holes, BC, length, solid).
 - [x] Step 2: 3-view HLR drawing (FRONT/TOP/RIGHT) → DXF. Confirmed in Alibre (1:1 mm, dashed hidden, BC, layers).
-- [x] Step 3: centerlines + DIMENSION entities (OD, BC, 8X hole, thickness, overall length). Awaiting Alibre check.
+- [x] Step 3: centerlines + DIMENSION entities (OD, BC, 8X hole, thickness, overall length).
+      Alibre: values + Ø correct; dims came in as text (open item); centerlines solid → fixed (name).
 - [ ] Next candidates: sheet + title block + scale; verification report; hub/RF dims; units decision.
